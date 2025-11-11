@@ -33,7 +33,7 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – MEER METRICS ---
+# --- 4. KPIs OPVRAGEN ---
 params = [("period", period), ("step", "day")]
 for sid in shop_ids:
     params.append(("data[]", sid))
@@ -43,15 +43,16 @@ for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
 data_response = requests.post(f"{API_BASE}/get-report", params=params)
 df = to_wide(normalize_vemcount_response(data_response.json()))
 
+# --- 5. CHECK DATA ---
 if df.empty:
-    st.error(f"Geen data voor {period}. Probeer 'today'.")
+    st.error(f"Geen data voor {period}. Probeer 'today' of andere vestiging.")
     st.stop()
 
-# --- 5. NAME ---
+# --- 6. NAME ---
 location_map = {loc["id"]: loc["name"] for loc in locations}
 df["name"] = df["shop_id"].map(location_map).fillna("Onbekend")
 
-# --- 6. UI ---
+# --- 7. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
 st.markdown(f"**{client['name']}** – *Mark Ryski*")
