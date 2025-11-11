@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & `[]` IN BODY (geen %5B%5D)
+# pages/retailgift.py – FINAL & 422 GEVIXT
 import streamlit as st
 import requests
 import pandas as pd
@@ -35,16 +35,19 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – `data[]` IN BODY (geen encoding) ---
+# --- 4. KPIs OPVRAGEN – period/step in QUERY, data[] in BODY ---
+query_params = {
+    "period": period,
+    "step": "day"
+}
+query_string = urlencode(query_params)
+
 form_data = []
-form_data.append(("period", period))
-form_data.append(("step", "day"))
 for sid in shop_ids:
     form_data.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
     form_data.append(("data_output[]", output))
 
-# GEBRUIK urlencode MET safe='[]' → `data[]=29641` letterlijk
 body = urlencode(form_data, doseq=True, safe='[]')
 
 headers = {
@@ -52,14 +55,17 @@ headers = {
 }
 
 data_response = requests.post(
-    f"{API_BASE}/get-report",
+    f"{API_BASE}/get-report?{query_string}",
     data=body,
     headers=headers
 )
 raw_json = data_response.json()
 
 # --- DEBUG ---
-st.subheader("DEBUG: Request Body (letterlijk)")
+st.subheader("DEBUG: API URL")
+st.code(data_response.url, language="text")
+
+st.subheader("DEBUG: Request Body")
 st.code(body, language="text")
 
 st.subheader("DEBUG: API Response")
@@ -69,7 +75,7 @@ st.json(raw_json, expanded=False)
 df = to_wide(normalize_vemcount_response(raw_json))
 
 if df.empty:
-    st.error(f"Geen data voor {period}. Probeer 'today'.")
+    st.error(f"Geen data voor {period}. Probeer 'today' of andere vestiging.")
     st.stop()
 
 # --- 6. NAME ---
@@ -108,4 +114,4 @@ else:
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
-st.caption("RetailGift AI: `data[]` letterlijk in BODY.")
+st.caption("RetailGift AI: period/step in URL, data[] in BODY.")
