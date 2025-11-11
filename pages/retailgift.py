@@ -1,7 +1,8 @@
-# pages/RetailGift.py – 100% WERKT MET /location + /report
+# pages/RetailGift.py – KLANTGERICHT & DYNAMISCH
 import streamlit as st
 import requests
 import pandas as pd
+import json
 from datetime import date
 from helpers_normalize import normalize_vemcount_response, to_wide
 from ui import kpi_card, inject_css
@@ -11,30 +12,37 @@ inject_css()
 
 API_BASE = st.secrets["API_URL"].rstrip("/")
 
-# --- 1. Haal alle locaties op ---
+# --- 1. Laad klanten uit clients.json ---
 try:
-    locations = requests.get(f"{API_BASE}/locations").json()["data"]
+    clients = requests.get("https://raw.githubusercontent.com/jouw-repo/main/clients.json").json()
+except:
+    st.error("clients.json niet gevonden. Upload naar repo root.")
+    st.stop()
+
+# --- 2. Kies klant ---
+client = st.selectbox("Kies klant", clients, format_func=lambda x: x["name"])
+client_id = client["company_id"]
+
+# --- 3. Haal locaties op per klant ---
+try:
+    locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
     if not locations:
-        st.error("Geen locaties gevonden. Controleer API_KEY rechten bij Vemcount.")
+        st.warning(f"Geen locaties voor {client['name']}. Vemcount rechten?")
         st.stop()
 except Exception as e:
     st.error(f"API fout: {e}")
     st.stop()
 
-# --- 2. Dropdown: Kies vestigingen ---
+# --- 4. Kies vestigingen ---
 selected = st.multiselect(
-    "Kies vestigingen",
+    "Vestigingen",
     locations,
-    format_func=lambda x: f"{x.get('name', 'Onbekend')} – {x.get('address', {}).get('postal_code', 'N/A')}",
-    default=locations[:1] if locations else []
+    format_func=lambda x: f"{x.get('name')} – {x.get('address', {}).get('postal_code', 'N/A')}",
+    default=locations[:1]
 )
 shop_ids = [loc["id"] for loc in selected]
 
-if not shop_ids:
-    st.warning("Selecteer minstens 1 vestiging.")
-    st.stop()
-
-# --- 3. Haal KPIs op ---
+# --- 5. Haal KPIs op ---
 params = [("data[]", sid) for sid in shop_ids] + [("data_output[]", k) for k in ["count_in", "turnover", "conversion_rate", "sales_per_visitor"]]
 r = requests.post(f"{API_BASE}/get-report", params=params)
 if r.status_code != 200:
@@ -44,9 +52,9 @@ if r.status_code != 200:
 df = to_wide(normalize_vemcount_response(r.json()))
 df["shop_name"] = df["shop_id"].map(lambda x: next((l["name"] for l in locations if l["id"] == x), "Onbekend"))
 
-# --- 4. UI: Store Manager ---
+# --- 6. UI: Store Manager ---
 st.title("STORE TRAFFIC IS A GIFT")
-st.markdown("**Mark Ryski – The Retailer's Guide to Converting Visits Into Sales**")
+st.markdown(f"**{client['name']}** – *Mark Ryski*")
 
 if len(selected) == 1:
     row = df.iloc[0]
@@ -67,4 +75,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Werkt 100% met /location + /report. Geen company nodig.")
+st.caption("RetailGift AI: Klant → Locaties → Acties. Onbetaalbaar.")
