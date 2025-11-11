@@ -1,9 +1,11 @@
-# pages/retailgift.py – FINAL & NO ENCODE
+# pages/retailgift.py – FINAL & RAW `[]`
 import streamlit as st
 import requests
 import pandas as pd
 import os
 import sys
+from urllib.parse import urlencode
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from helpers.ui import inject_css, kpi_card
@@ -33,15 +35,17 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – GEBRUIK `data` ZONDER ENCODE ---
-form_data = {
-    "period": period,
-    "step": "day"
-}
+# --- 4. KPIs OPVRAGEN – RAW `data[]` ZONDER ENCODE ---
+params = []
+params.append(("period", period))
+params.append(("step", "day"))
 for sid in shop_ids:
-    form_data[f"data[]"] = sid
+    params.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover"]:
-    form_data[f"data_output[]"] = output
+    params.append(("data_output[]", output))
+
+# GEBRUIK urlencode MET safe='' VOOR `[]`
+raw_body = urlencode(params, doseq=True, safe='[]')
 
 headers = {
     "Content-Type": "application/x-www-form-urlencoded"
@@ -49,15 +53,14 @@ headers = {
 
 data_response = requests.post(
     f"{API_BASE}/get-report",
-    data=form_data,  # <--- GEBRUIK `data` i.p.v. `params`
+    data=raw_body,
     headers=headers
 )
 raw_json = data_response.json()
 
 # --- DEBUG ---
-st.subheader("DEBUG: API URL")
-st.write(data_response.request.url)  # Zonder encoding
-st.write("DEBUG: Request Body:", data_response.request.body)
+st.subheader("DEBUG: Request Body")
+st.code(raw_body, language="text")
 
 st.subheader("DEBUG: Raw JSON")
 st.json(raw_json, expanded=False)
@@ -66,7 +69,7 @@ st.json(raw_json, expanded=False)
 df = to_wide(normalize_vemcount_response(raw_json))
 
 if df.empty:
-    st.error(f"Geen data. Probeer 'today' of andere vestiging.")
+    st.error(f"Geen data voor shop_id(s): {shop_ids}. Probeer 'today'.")
     st.stop()
 
 # --- 6. NAME ---
@@ -101,4 +104,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Werkt met `data[]` zonder encoding.")
+st.caption("RetailGift AI: Werkt met `data[]` letterlijk.")
