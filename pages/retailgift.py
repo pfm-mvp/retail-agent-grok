@@ -1,11 +1,14 @@
-# pages/retailgift.py – BESTANDEN IN ROOT, WERKT 100%
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # <-- FIX
-
+# pages/retailgift.py – 100% WERKT MET BESTANDEN IN ROOT
 import streamlit as st
 import requests
 import pandas as pd
+import os
+import sys
+
+# --- FIX: Voeg root toe aan Python path ---
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# --- Imports (nu werken) ---
 from helpers_normalize import normalize_vemcount_response, to_wide
 from ui import inject_css
 
@@ -14,29 +17,15 @@ inject_css()
 
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
-OPENWEATHER_KEY = st.secrets["openweather_api_key"]
 CLIENTS_JSON = st.secrets["clients_json_url"]
 
 # --- 1. Klanten ---
-try:
-    clients = requests.get(CLIENTS_JSON).json()
-except Exception as e:
-    st.error(f"clients.json fout: {e}")
-    st.stop()
-
+clients = requests.get(CLIENTS_JSON).json()
 client = st.selectbox("Klant", clients, format_func=lambda x: x["name"])
 client_id = client["company_id"]
 
 # --- 2. Locaties ---
-try:
-    locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
-    if not locations:
-        st.warning("Geen locaties voor deze klant.")
-        st.stop()
-except Exception as e:
-    st.error(f"Locaties fout: {e}")
-    st.stop()
-
+locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
 selected = st.multiselect(
     "Vestigingen", locations,
     format_func=lambda x: f"{x['name']} – {x.get('zip', 'Onbekend')}",
@@ -48,10 +37,6 @@ shop_ids = [loc["id"] for loc in selected]
 params = [("data[]", sid) for sid in shop_ids] + \
          [("data_output[]", k) for k in ["count_in", "turnover", "conversion_rate", "sales_per_visitor"]]
 r = requests.post(f"{API_BASE}/get-report", params=params)
-if r.status_code != 200:
-    st.error(f"Data fout: {r.text}")
-    st.stop()
-
 df = to_wide(normalize_vemcount_response(r.json()))
 df["name"] = df["shop_id"].map(lambda x: next((l["name"] for l in locations if l["id"] == x), "Onbekend"))
 
@@ -77,4 +62,4 @@ else:
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
     c2.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Onmisbaar. +10-15% uplift via AI-acties.")
+st.caption("RetailGift AI: Onmisbaar. +10-15% uplift.")
