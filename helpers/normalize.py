@@ -25,7 +25,7 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
     rows = []
     for period in data.values():
         for shop_id, shop_info in period.items():
-            row = {"shop_id": int(shop_id)}
+            row = {"shop_id": int(shop_id)}  # <--- HIER TOEGEVOEGD
             row.update(extract_latest_date_data(shop_info))
             rows.append(row)
     return pd.DataFrame(rows)
