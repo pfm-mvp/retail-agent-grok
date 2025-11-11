@@ -7,13 +7,16 @@ def extract_latest_date_data(shop_info: Dict) -> Dict:
     if not dates:
         return {"count_in": 0, "conversion_rate": 0.0, "turnover": 0, "sales_per_visitor": 0.0}
     
-    # Neem laatste datum
     latest_date = sorted(dates.keys())[-1]
     date_entry = dates.get(latest_date, {})
     day_data = date_entry.get("data", {})
     
+    # String to int/float
+    count_in_str = day_data.get("count_in", "0")
+    count_in = int(count_in_str) if count_in_str.isdigit() else 0
+    
     return {
-        "count_in": int(day_data.get("count_in", 0) or 0),
+        "count_in": count_in,
         "conversion_rate": float(day_data.get("conversion_rate", 0) or 0) * 100,
         "turnover": float(day_data.get("turnover", 0) or 0),
         "sales_per_visitor": float(day_data.get("sales_per_visitor", 0) or 0)
@@ -23,7 +26,6 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
     data = response.get("data", {})
     rows = []
     
-    # Loop door periodes (yesterday, today, etc.)
     for period, shops in data.items():
         for shop_id_str, shop_info in shops.items():
             shop_id = int(shop_id_str)
@@ -36,7 +38,7 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
     
     df = pd.DataFrame(rows)
     if df.empty:
-        st.warning("Geen data gevonden in API response.")
+        st.warning("Geen data in API response.")
     return df
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
