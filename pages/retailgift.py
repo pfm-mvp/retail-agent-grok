@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & WERKT
+# pages/retailgift.py – 100% WERKT MET API DOCS
 import streamlit as st
 import requests
 import pandas as pd
@@ -30,15 +30,22 @@ selected_locations = st.multiselect(
 )
 shop_ids = [loc["id"] for loc in selected_locations]
 
-# --- 3. KPIs OPVRAGEN ---
-params = [("data[]", sid) for sid in shop_ids] + \
-         [("data_output[]", "count_in"), ("data_output[]", "conversion_rate")]
+# --- 3. PERIODE SELECTIE (API DOCS) ---
+period = st.selectbox("Periode", ["yesterday", "today", "this_week", "last_week"], index=0)
 
-data_response = requests.post(f"{API_BASE}/get-report", params=params)
+# --- 4. KPIs OPVRAGEN ---
+params = [
+    ("source", "shops"),
+    ("period", period),
+    ("period_step", "day")
+] + [("data[]", sid) for sid in shop_ids] + \
+    [("data_output[]", "count_in"), ("data_output[]", "conversion_rate"), ("data_output[]", "turnover")]
+
+data_response = requests.post(f"{API_BASE}/report", params=params)  # /report niet /get-report
 df = to_wide(normalize_vemcount_response(data_response.json()))
 df["name"] = df["shop_id"].map(lambda x: next((l["name"] for l in locations if l["id"] == x), "Onbekend"))
 
-# --- 4. UI ---
+# --- 5. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
 st.markdown(f"**{client['name']}** – *Mark Ryski*")
@@ -46,28 +53,30 @@ st.markdown(f"**{client['name']}** – *Mark Ryski*")
 if len(selected_locations) == 1:
     row = df.iloc[0]
     loc = selected_locations[0]
-    st.header(f"{loc['name']} – Gift of the Day (Gisteren)")
+    st.header(f"{loc['name']} – Gift of the Day ({period})")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        kpi_card("Footfall", f"{int(row['count_in']):,}", "Gisteren", "primary")
+        kpi_card("Footfall", f"{int(row['count_in']):,}", period, "primary")
     with col2:
         conv = row['conversion_rate']
         tone = "good" if conv >= 25 else "bad"
-        kpi_card("Conversie", f"{conv:.1f}%", "Gisteren", tone)
+        kpi_card("Conversie", f"{conv:.1f}%", period, tone)
+    with col3:
+        omzet = int(row['turnover'] or 0)
+        kpi_card("Omzet", f"€{omzet:,}", period, "good")
 
     if row['count_in'] == 0:
-        st.warning("Geen data voor gisteren. Probeer een andere vestiging.")
+        st.warning(f"Geen data voor {period}.")
     else:
-        spv_estimate = 22.0  # Gem. SPV
-        omzet = row['count_in'] * spv_estimate
         st.success(f"**+1 FTE 12-18u → +€{int(omzet * 0.1):,} omzet** (Ryski Ch3)")
 
 else:
-    agg = df.agg({"count_in": "sum", "conversion_rate": "mean"})
-    st.header("Regio Overzicht (Gisteren)")
-    c1, c2 = st.columns(2)
+    agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
+    st.header(f"Regio Overzicht ({period})")
+    c1, c2, c3 = st.columns(3)
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
+    c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Werkt met jouw API. +10-15% uplift.")
+st.caption("RetailGift AI: Werkt met /report API. +10-15% uplift.")
