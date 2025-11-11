@@ -1,7 +1,3 @@
-# pages/retailgift.py – VOEG DIT TOE OP REGEL 1
-import os
-st.write("DEBUG: helpers dir:", os.listdir("../helpers"))  # <-- FORCEER CHECK
-
 # pages/retailgift.py – 100% WERKT MET helpers/ IN ROOT
 import streamlit as st
 import requests
