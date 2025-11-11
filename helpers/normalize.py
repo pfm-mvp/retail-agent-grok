@@ -1,4 +1,4 @@
-# helpers/normalize.py – GEVIXT & ROBUUST
+# helpers/normalize.py – GEVIXT & WERKT
 import pandas as pd
 from typing import Dict, Any
 
