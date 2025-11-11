@@ -1,14 +1,11 @@
-# pages/retailgift.py – FINAL & 100% WERKT
+# pages/retailgift.py – FINAL & ROBUUST
 import streamlit as st
 import requests
 import pandas as pd
 import os
 import sys
-
-# --- FIX: Voeg root toe aan path ---
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# --- IMPORTS (nu werken) ---
 from helpers.ui import inject_css, kpi_card
 from helpers.normalize import normalize_vemcount_response, to_wide
 
@@ -17,13 +14,18 @@ inject_css()
 
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
-CLIENTS_JSON_URL = st.secrets["clients_json_url"]  # Raw GitHub URL
+CLIENTS_JSON_URL = st.secrets["clients_json_url"]
 
-# --- 1. KLANTEN DROPDOWN UIT clients.json ---
+# --- 1. KLANTEN DROPDOWN ---
 try:
-    clients = requests.get(CLIENTS_JSON_URL).json()
+    response = requests.get(CLIENTS_JSON_URL)
+    response.raise_for_status()
+    clients = response.json()
+    if not clients:
+        st.error("clients.json leeg.")
+        st.stop()
 except Exception as e:
-    st.error(f"clients.json niet bereikbaar: {e}")
+    st.error(f"clients.json fout: {e}. Check URL en syntax.")
     st.stop()
 
 client = st.selectbox(
@@ -33,9 +35,11 @@ client = st.selectbox(
 )
 client_id = client["company_id"]
 
-# --- 2. LOCATIES OPVRAGEN VOOR GEKOZEN KLANT ---
+# --- 2. LOCATIES OPVRAGEN ---
 try:
-    locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
+    response = requests.get(f"{API_BASE}/clients/{client_id}/locations")
+    response.raise_for_status()
+    locations = response.json()["data"]
     if not locations:
         st.warning("Geen locaties voor deze klant.")
         st.stop()
@@ -47,17 +51,21 @@ selected_locations = st.multiselect(
     "Selecteer vestiging(en)",
     locations,
     format_func=lambda x: f"{x['name']} – {x.get('zip', 'Onbekend')}",
-    default=locations[:1]  # Default: eerste vestiging
+    default=locations[:1]
 )
 shop_ids = [loc["id"] for loc in selected_locations]
+
+if not shop_ids:
+    st.warning("Selecteer minstens 1 vestiging.")
+    st.stop()
 
 # --- 3. KPIs OPVRAGEN ---
 params = [("data[]", sid) for sid in shop_ids] + \
          [("data_output[]", k) for k in ["count_in", "turnover", "conversion_rate", "sales_per_visitor"]]
 try:
-    r = requests.post(f"{API_BASE}/get-report", params=params)
-    r.raise_for_status()
-    df = to_wide(normalize_vemcount_response(r.json()))
+    response = requests.post(f"{API_BASE}/get-report", params=params)
+    response.raise_for_status()
+    df = to_wide(normalize_vemcount_response(response.json()))
     df["name"] = df["shop_id"].map(lambda x: next((l["name"] for l in locations if l["id"] == x), "Onbekend"))
 except Exception as e:
     st.error(f"Data fout: {e}")
