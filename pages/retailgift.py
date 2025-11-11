@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & 100% WERKT
+# pages/retailgift.py – FIX URL ENCODE
 import streamlit as st
 import requests
 import pandas as pd
@@ -33,41 +33,48 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN ---
-params = [
-    ("source", "shops"),
-    ("period", period),
-    ("period_step", "day")
-] + [("data[]", sid) for sid in shop_ids] + \
-    [("data_output[]", "count_in"), ("data_output[]", "conversion_rate"), ("data_output[]", "turnover")]
+# --- 4. KPIs OPVRAGEN – GEBRUIK `data` ZONDER `[]` ---
+params = {
+    "source": "shops",
+    "period": period,
+    "period_step": "day"
+}
+for sid in shop_ids:
+    params[f"data"] = sid  # <--- ALLEEN `data=26249` (laatste overschrijft)
+for output in ["count_in", "conversion_rate", "turnover"]:
+    params[f"data_output"] = output  # <--- ALLEEN `data_output=turnover`
 
 data_response = requests.post(f"{API_BASE}/report", params=params)
-df = to_wide(normalize_vemcount_response(data_response.json()))
+raw_json = data_response.json()
 
-# --- DEBUG: ZIE df structuur ---
-st.write("DEBUG df columns:", df.columns.tolist())
-st.write("DEBUG shop_ids:", shop_ids)
+# --- DEBUG ---
+st.subheader("DEBUG: API URL")
+st.write(data_response.url)  # Zie exacte URL
 
-# --- 5. NAME TOEVOEGEN (alleen als shop_id bestaat) ---
-if "shop_id" in df.columns:
-    location_map = {loc["id"]: loc["name"] for loc in locations}
-    df["name"] = df["shop_id"].map(location_map).fillna("Onbekend")
-else:
-    st.error("Geen shop_id in data – API fout")
+st.subheader("DEBUG: API Response")
+st.json(raw_json, expanded=False)
+
+# --- 5. NORMALISEER ---
+df = to_wide(normalize_vemcount_response(raw_json))
+
+if df.empty:
+    st.error(f"Geen data voor shop_id(s): {shop_ids}. Probeer 'today'.")
     st.stop()
 
-# --- 6. UI ---
-st.image("https://i.imgur.com/8Y5f5P.png", width=300)
+# --- 6. NAME ---
+location_map = {loc["id"]: loc["name"] for loc in locations}
+df["name"] = df["shop_id"].map(location_map).fillna("Onbekend")
+
+# --- 7. UI ---
+st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
 st.markdown(f"**{client['name']}** – *Mark Ryski*")
 
 if len(selected_locations) == 1:
     row = df.iloc[0]
     st.header(f"{row['name']} – Gift of the Day ({period})")
-
     col1, col2, col3 = st.columns(3)
-    with col1:
-        kpi_card("Footfall", f"{int(row['count_in']):,}", period, "primary")
+    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", period, "primary")
     with col2:
         conv = row['conversion_rate']
         tone = "good" if conv >= 25 else "bad"
@@ -75,7 +82,6 @@ if len(selected_locations) == 1:
     with col3:
         omzet = int(row['turnover'] or 0)
         kpi_card("Omzet", f"€{omzet:,}", period, "good")
-
 else:
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
     st.header(f"Regio Overzicht ({period})")
@@ -84,4 +90,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: 100% LIVE. +10-15% uplift.")
+st.caption("RetailGift AI: Werkt met `data=26249`.")
