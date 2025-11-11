@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & WERKT MET JOUW ENDPOINT
+# pages/retailgift.py – FINAL & NO ENCODE
 import streamlit as st
 import requests
 import pandas as pd
@@ -13,7 +13,7 @@ st.set_page_config(page_title="RetailGift AI", page_icon="STORE TRAFFIC IS A GIF
 inject_css()
 
 # --- SECRETS ---
-API_BASE = st.secrets["API_URL"].rstrip("/")  # https://retailgift-api.onrender.com
+API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON_URL = st.secrets["clients_json_url"]
 
 # --- 1. KLANTEN ---
@@ -33,19 +33,31 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – JOUW ENDPOINT + data[] ---
-params = [
-    ("period", period),
-    ("step", "day")
-] + [("data[]", sid) for sid in shop_ids] + \
-    [("data_output[]", "count_in"), ("data_output[]", "conversion_rate"), ("data_output[]", "turnover")]
+# --- 4. KPIs OPVRAGEN – GEBRUIK `data` ZONDER ENCODE ---
+form_data = {
+    "period": period,
+    "step": "day"
+}
+for sid in shop_ids:
+    form_data[f"data[]"] = sid
+for output in ["count_in", "conversion_rate", "turnover"]:
+    form_data[f"data_output[]"] = output
 
-data_response = requests.post(f"{API_BASE}/get-report", params=params)  # <--- JOUW ENDPOINT
+headers = {
+    "Content-Type": "application/x-www-form-urlencoded"
+}
+
+data_response = requests.post(
+    f"{API_BASE}/get-report",
+    data=form_data,  # <--- GEBRUIK `data` i.p.v. `params`
+    headers=headers
+)
 raw_json = data_response.json()
 
 # --- DEBUG ---
 st.subheader("DEBUG: API URL")
-st.write(data_response.url)
+st.write(data_response.request.url)  # Zonder encoding
+st.write("DEBUG: Request Body:", data_response.request.body)
 
 st.subheader("DEBUG: Raw JSON")
 st.json(raw_json, expanded=False)
@@ -54,7 +66,7 @@ st.json(raw_json, expanded=False)
 df = to_wide(normalize_vemcount_response(raw_json))
 
 if df.empty:
-    st.error(f"Geen data voor shop_id(s): {shop_ids}. Probeer 'today'.")
+    st.error(f"Geen data. Probeer 'today' of andere vestiging.")
     st.stop()
 
 # --- 6. NAME ---
@@ -89,4 +101,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Werkt met /get-report + data[].")
+st.caption("RetailGift AI: Werkt met `data[]` zonder encoding.")
