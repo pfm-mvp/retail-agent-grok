@@ -1,10 +1,9 @@
-# pages/retailgift.py – FINAL & ALLES IN QUERY STRING
+# pages/retailgift.py – FINAL & `[]` LETTERLIJK IN URL
 import streamlit as st
 import requests
 import pandas as pd
 import os
 import sys
-from urllib.parse import urlencode
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -35,26 +34,25 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – ALLES IN QUERY STRING ---
-params = [
-    ("period", period),
-    ("step", "day")
+# --- 4. KPIs OPVRAGEN – MANUAL URL MET `[]` LETTERLIJK ---
+base_url = f"{API_BASE}/get-report"
+query_parts = [
+    f"period={period}",
+    "step=day"
 ]
 for sid in shop_ids:
-    params.append(("data[]", sid))
+    query_parts.append(f"data[]={sid}")
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
-    params.append(("data_output[]", output))
+    query_parts.append(f"data_output[]={output}")
 
-# GEBRUIK urlencode MET safe='[]' → `data[]=29641` in URL
-query_string = urlencode(params, doseq=True, safe='[]')
+full_url = f"{base_url}?{'&'.join(query_parts)}"
 
-# GEBRUIK GET (of POST met params) – API accepteert beide
-data_response = requests.get(f"{API_BASE}/get-report?{query_string}")
+data_response = requests.get(full_url)
 raw_json = data_response.json()
 
 # --- DEBUG ---
-st.subheader("DEBUG: Volledige API URL")
-st.code(data_response.url, language="text")
+st.subheader("DEBUG: Volledige API URL (letterlijk [])")
+st.code(full_url, language="text")
 
 st.subheader("DEBUG: API Response")
 st.json(raw_json, expanded=False)
@@ -63,7 +61,7 @@ st.json(raw_json, expanded=False)
 df = to_wide(normalize_vemcount_response(raw_json))
 
 if df.empty:
-    st.error(f"Geen data voor {period}. Probeer 'today' of andere vestiging.")
+    st.error(f"Geen data voor {period}. Probeer 'today'.")
     st.stop()
 
 # --- 6. NAME ---
@@ -102,4 +100,4 @@ else:
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
-st.caption("RetailGift AI: ALLES in QUERY STRING. `data[]` letterlijk.")
+st.caption("RetailGift AI: `[]` letterlijk in URL. Geen %5B%5D.")
