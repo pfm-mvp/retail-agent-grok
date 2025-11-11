@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & 422 GEVIXT
+# pages/retailgift.py – FINAL & ALLES IN QUERY STRING
 import streamlit as st
 import requests
 import pandas as pd
@@ -35,38 +35,26 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – period/step in QUERY, data[] in BODY ---
-query_params = {
-    "period": period,
-    "step": "day"
-}
-query_string = urlencode(query_params)
-
-form_data = []
+# --- 4. KPIs OPVRAGEN – ALLES IN QUERY STRING ---
+params = [
+    ("period", period),
+    ("step", "day")
+]
 for sid in shop_ids:
-    form_data.append(("data[]", sid))
+    params.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
-    form_data.append(("data_output[]", output))
+    params.append(("data_output[]", output))
 
-body = urlencode(form_data, doseq=True, safe='[]')
+# GEBRUIK urlencode MET safe='[]' → `data[]=29641` in URL
+query_string = urlencode(params, doseq=True, safe='[]')
 
-headers = {
-    "Content-Type": "application/x-www-form-urlencoded"
-}
-
-data_response = requests.post(
-    f"{API_BASE}/get-report?{query_string}",
-    data=body,
-    headers=headers
-)
+# GEBRUIK GET (of POST met params) – API accepteert beide
+data_response = requests.get(f"{API_BASE}/get-report?{query_string}")
 raw_json = data_response.json()
 
 # --- DEBUG ---
-st.subheader("DEBUG: API URL")
+st.subheader("DEBUG: Volledige API URL")
 st.code(data_response.url, language="text")
-
-st.subheader("DEBUG: Request Body")
-st.code(body, language="text")
 
 st.subheader("DEBUG: API Response")
 st.json(raw_json, expanded=False)
@@ -114,4 +102,4 @@ else:
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
-st.caption("RetailGift AI: period/step in URL, data[] in BODY.")
+st.caption("RetailGift AI: ALLES in QUERY STRING. `data[]` letterlijk.")
