@@ -1,4 +1,3 @@
-
 import streamlit as st
 
 def brand_colors():
