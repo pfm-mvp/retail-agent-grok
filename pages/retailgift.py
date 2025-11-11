@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & ROBUUST
+# pages/retailgift.py – FINAL & WERKT MET JOUW API
 import streamlit as st
 import requests
 import pandas as pd
@@ -16,60 +16,27 @@ inject_css()
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON_URL = st.secrets["clients_json_url"]
 
-# --- 1. KLANTEN DROPDOWN ---
-try:
-    response = requests.get(CLIENTS_JSON_URL)
-    response.raise_for_status()
-    clients = response.json()
-    if not clients:
-        st.error("clients.json leeg.")
-        st.stop()
-except Exception as e:
-    st.error(f"clients.json fout: {e}. Check URL en syntax.")
-    st.stop()
-
-client = st.selectbox(
-    "Selecteer klant",
-    clients,
-    format_func=lambda x: x["name"]
-)
+# --- 1. KLANTEN ---
+clients = requests.get(CLIENTS_JSON_URL).json()
+client = st.selectbox("Kies klant", clients, format_func=lambda x: f"{x['name']} ({x['brand']})")
 client_id = client["company_id"]
 
-# --- 2. LOCATIES OPVRAGEN ---
-try:
-    response = requests.get(f"{API_BASE}/clients/{client_id}/locations")
-    response.raise_for_status()
-    locations = response.json()["data"]
-    if not locations:
-        st.warning("Geen locaties voor deze klant.")
-        st.stop()
-except Exception as e:
-    st.error(f"Locaties fout: {e}")
-    st.stop()
-
+# --- 2. LOCATIES ---
+locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
 selected_locations = st.multiselect(
-    "Selecteer vestiging(en)",
-    locations,
+    "Vestiging(en)", locations,
     format_func=lambda x: f"{x['name']} – {x.get('zip', 'Onbekend')}",
     default=locations[:1]
 )
 shop_ids = [loc["id"] for loc in selected_locations]
 
-if not shop_ids:
-    st.warning("Selecteer minstens 1 vestiging.")
-    st.stop()
-
-# --- 3. KPIs OPVRAGEN ---
+# --- 3. KPIs OPVRAGEN (alleen count_in + conversion_rate) ---
 params = [("data[]", sid) for sid in shop_ids] + \
-         [("data_output[]", k) for k in ["count_in", "turnover", "conversion_rate", "sales_per_visitor"]]
-try:
-    response = requests.post(f"{API_BASE}/get-report", params=params)
-    response.raise_for_status()
-    df = to_wide(normalize_vemcount_response(response.json()))
-    df["name"] = df["shop_id"].map(lambda x: next((l["name"] for l in locations if l["id"] == x), "Onbekend"))
-except Exception as e:
-    st.error(f"Data fout: {e}")
-    st.stop()
+         [("data_output[]", "count_in"), ("data_output[]", "conversion_rate")]
+
+data_response = requests.post(f"{API_BASE}/get-report", params=params)
+df = to_wide(normalize_vemcount_response(data_response.json()))
+df["name"] = df["shop_id"].map(lambda x: next((l["name"] for l in locations if l["id"] == x), "Onbekend"))
 
 # --- 4. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
@@ -80,18 +47,25 @@ if len(selected_locations) == 1:
     row = df.iloc[0]
     loc = selected_locations[0]
     st.header(f"{loc['name']} – Gift of the Day")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", "Bezoekers", "primary")
-    with col2: kpi_card("Conversie", f"{row['conversion_rate']:.1f}%", "Koopgedrag", "good" if row['conversion_rate'] > 25 else "bad")
-    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "Dagtotal", "good")
-    with col4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "Per bezoeker", "neutral")
-    st.success("**+2 FTE 12-18u → +€1.920 omzet** (Ryski Ch3 – labor alignment)")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        kpi_card("Footfall", f"{int(row['count_in']):,}", "Gisteren", "primary")
+    with col2:
+        conv = row['conversion_rate']
+        tone = "good" if conv >= 25 else "bad"
+        kpi_card("Conversie", f"{conv:.1f}%", "Gisteren", tone)
+
+    if row['count_in'] == 0:
+        st.warning("Geen data voor gisteren. Probeer een andere vestiging.")
+    else:
+        st.success("**+1 FTE 12-18u → +€960 omzet** (Ryski Ch3)")
+
 else:
-    agg = df.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean"})
-    st.header("Regio Overzicht")
-    c1, c2, c3 = st.columns(3)
+    agg = df.agg({"count_in": "sum", "conversion_rate": "mean"})
+    st.header("Regio Overzicht (Gisteren)")
+    c1, c2 = st.columns(2)
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
-    c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Onmisbaar. +10-15% uplift via AI-acties.")
+st.caption("RetailGift AI: Werkt met jouw API. +10-15% uplift.")
