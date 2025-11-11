@@ -4,12 +4,7 @@ from typing import Dict
 def extract_latest_date_data(shop_data: Dict) -> Dict:
     dates = shop_data.get("dates", {})
     if not dates:
-        return {
-            "count_in": 0,
-            "conversion_rate": 0.0,
-            "turnover": 0,
-            "sales_per_visitor": 0.0
-        }
+        return {"count_in": 0, "conversion_rate": 0.0, "turnover": 0, "sales_per_visitor": 0.0}
     latest_date = sorted(dates.keys())[-1]
     day_data = dates[latest_date].get("data", {})
     return {
