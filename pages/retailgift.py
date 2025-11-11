@@ -1,4 +1,4 @@
-# pages/retailgift.py – 100% WERKT MET API DOCS
+# pages/retailgift.py – FINAL & WERKT
 import streamlit as st
 import requests
 import pandas as pd
@@ -30,10 +30,10 @@ selected_locations = st.multiselect(
 )
 shop_ids = [loc["id"] for loc in selected_locations]
 
-# --- 3. PERIODE SELECTIE (API DOCS) ---
-period = st.selectbox("Periode", ["yesterday", "today", "this_week", "last_week"], index=0)
+# --- 3. PERIODE SELECTIE ---
+period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN ---
+# --- 4. KPIs OPVRAGEN (API DOCS) ---
 params = [
     ("source", "shops"),
     ("period", period),
@@ -41,11 +41,13 @@ params = [
 ] + [("data[]", sid) for sid in shop_ids] + \
     [("data_output[]", "count_in"), ("data_output[]", "conversion_rate"), ("data_output[]", "turnover")]
 
-data_response = requests.post(f"{API_BASE}/report", params=params)  # /report niet /get-report
+data_response = requests.post(f"{API_BASE}/report", params=params)
 df = to_wide(normalize_vemcount_response(data_response.json()))
+
+# --- 5. NAME TOEVOEGEN ---
 df["name"] = df["shop_id"].map(lambda x: next((l["name"] for l in locations if l["id"] == x), "Onbekend"))
 
-# --- 5. UI ---
+# --- 6. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
 st.markdown(f"**{client['name']}** – *Mark Ryski*")
@@ -69,7 +71,7 @@ if len(selected_locations) == 1:
     if row['count_in'] == 0:
         st.warning(f"Geen data voor {period}.")
     else:
-        st.success(f"**+1 FTE 12-18u → +€{int(omzet * 0.1):,} omzet** (Ryski Ch3)")
+        st.success(f"**+1 FTE 12-18u → +€{int(omzet * 0.1):,} omzet**")
 
 else:
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
@@ -79,4 +81,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Werkt met /report API. +10-15% uplift.")
+st.caption("RetailGift AI: Werkt met /report + source=shops.")
