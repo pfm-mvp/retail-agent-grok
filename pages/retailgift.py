@@ -1,4 +1,4 @@
-# pages/retailgift.py – FIX URL ENCODE
+# pages/retailgift.py – FINAL & WERKT MET JOUW ENDPOINT
 import streamlit as st
 import requests
 import pandas as pd
@@ -13,7 +13,7 @@ st.set_page_config(page_title="RetailGift AI", page_icon="STORE TRAFFIC IS A GIF
 inject_css()
 
 # --- SECRETS ---
-API_BASE = st.secrets["API_URL"].rstrip("/")
+API_BASE = st.secrets["API_URL"].rstrip("/")  # https://retailgift-api.onrender.com
 CLIENTS_JSON_URL = st.secrets["clients_json_url"]
 
 # --- 1. KLANTEN ---
@@ -33,25 +33,21 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – GEBRUIK `data` ZONDER `[]` ---
-params = {
-    "source": "shops",
-    "period": period,
-    "period_step": "day"
-}
-for sid in shop_ids:
-    params[f"data"] = sid  # <--- ALLEEN `data=26249` (laatste overschrijft)
-for output in ["count_in", "conversion_rate", "turnover"]:
-    params[f"data_output"] = output  # <--- ALLEEN `data_output=turnover`
+# --- 4. KPIs OPVRAGEN – JOUW ENDPOINT + data[] ---
+params = [
+    ("period", period),
+    ("step", "day")
+] + [("data[]", sid) for sid in shop_ids] + \
+    [("data_output[]", "count_in"), ("data_output[]", "conversion_rate"), ("data_output[]", "turnover")]
 
-data_response = requests.post(f"{API_BASE}/report", params=params)
+data_response = requests.post(f"{API_BASE}/get-report", params=params)  # <--- JOUW ENDPOINT
 raw_json = data_response.json()
 
 # --- DEBUG ---
 st.subheader("DEBUG: API URL")
-st.write(data_response.url)  # Zie exacte URL
+st.write(data_response.url)
 
-st.subheader("DEBUG: API Response")
+st.subheader("DEBUG: Raw JSON")
 st.json(raw_json, expanded=False)
 
 # --- 5. NORMALISEER ---
@@ -73,8 +69,10 @@ st.markdown(f"**{client['name']}** – *Mark Ryski*")
 if len(selected_locations) == 1:
     row = df.iloc[0]
     st.header(f"{row['name']} – Gift of the Day ({period})")
+
     col1, col2, col3 = st.columns(3)
-    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", period, "primary")
+    with col1:
+        kpi_card("Footfall", f"{int(row['count_in']):,}", period, "primary")
     with col2:
         conv = row['conversion_rate']
         tone = "good" if conv >= 25 else "bad"
@@ -82,6 +80,7 @@ if len(selected_locations) == 1:
     with col3:
         omzet = int(row['turnover'] or 0)
         kpi_card("Omzet", f"€{omzet:,}", period, "good")
+
 else:
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
     st.header(f"Regio Overzicht ({period})")
@@ -90,4 +89,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Werkt met `data=26249`.")
+st.caption("RetailGift AI: Werkt met /get-report + data[].")
