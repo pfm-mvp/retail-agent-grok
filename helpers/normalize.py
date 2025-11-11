@@ -1,9 +1,7 @@
-# helpers/normalize.py – 100% WERKT
 import pandas as pd
-from typing import Dict, Any
+from typing import Dict
 
 def extract_latest_date_data(shop_data: Dict) -> Dict:
-    """Haal data van laatste datum uit 'dates'"""
     dates = shop_data.get("dates", {})
     if not dates:
         return {
@@ -12,10 +10,8 @@ def extract_latest_date_data(shop_data: Dict) -> Dict:
             "turnover": 0,
             "sales_per_visitor": 0.0
         }
-    
     latest_date = sorted(dates.keys())[-1]
     day_data = dates[latest_date].get("data", {})
-    
     return {
         "count_in": int(day_data.get("count_in", 0) or 0),
         "conversion_rate": float(day_data.get("conversion_rate", 0) or 0) * 100,
@@ -26,13 +22,11 @@ def extract_latest_date_data(shop_data: Dict) -> Dict:
 def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
     data = response.get("data", {})
     rows = []
-    
     for period in data.values():
         for shop_id, shop_info in period.items():
             row = {"shop_id": int(shop_id)}
             row.update(extract_latest_date_data(shop_info))
             rows.append(row)
-    
     return pd.DataFrame(rows)
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
