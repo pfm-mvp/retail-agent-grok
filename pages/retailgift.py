@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & WERKT MET JOUW API
+# pages/retailgift.py – FINAL & WERKT
 import streamlit as st
 import requests
 import pandas as pd
@@ -30,7 +30,7 @@ selected_locations = st.multiselect(
 )
 shop_ids = [loc["id"] for loc in selected_locations]
 
-# --- 3. KPIs OPVRAGEN (alleen count_in + conversion_rate) ---
+# --- 3. KPIs OPVRAGEN ---
 params = [("data[]", sid) for sid in shop_ids] + \
          [("data_output[]", "count_in"), ("data_output[]", "conversion_rate")]
 
@@ -46,7 +46,7 @@ st.markdown(f"**{client['name']}** – *Mark Ryski*")
 if len(selected_locations) == 1:
     row = df.iloc[0]
     loc = selected_locations[0]
-    st.header(f"{loc['name']} – Gift of the Day")
+    st.header(f"{loc['name']} – Gift of the Day (Gisteren)")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -59,7 +59,9 @@ if len(selected_locations) == 1:
     if row['count_in'] == 0:
         st.warning("Geen data voor gisteren. Probeer een andere vestiging.")
     else:
-        st.success("**+1 FTE 12-18u → +€960 omzet** (Ryski Ch3)")
+        spv_estimate = 22.0  # Gem. SPV
+        omzet = row['count_in'] * spv_estimate
+        st.success(f"**+1 FTE 12-18u → +€{int(omzet * 0.1):,} omzet** (Ryski Ch3)")
 
 else:
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean"})
