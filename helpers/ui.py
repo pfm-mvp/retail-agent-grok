@@ -1,3 +1,4 @@
+# helpers/ui.py – FINAL & WERKT
 import streamlit as st
 
 def brand_colors():
@@ -7,7 +8,7 @@ def brand_colors():
     tint = "#F9F7FB"
     return {"primary": primary, "success": success, "danger": danger, "tint": tint}
 
-def kpi_card(label:str, value_html:str, subtitle:str, tone:str="neutral"):
+def kpi_card(label: str, value_html: str, subtitle: str, tone: str = "neutral"):
     colors = brand_colors()
     border = "#eeeeee"
     if tone == "good":
@@ -21,4 +22,14 @@ def kpi_card(label:str, value_html:str, subtitle:str, tone:str="neutral"):
       <div style="font-size:28px;font-weight:700;line-height:1">{value_html}</div>
       <div style="color:#666;font-size:12px">{subtitle}</div>
     </div>
+    """, unsafe_allow_html=True)
+
+# --- VOEG DIT TOE: inject_css ---
+def inject_css():
+    st.markdown("""
+    <style>
+    .big-font {font-size: 42px !important; font-weight: bold; color: #1E88E5;}
+    .kpi-card {background: #f0f2f6; padding: 1rem; border-radius: 10px; text-align: center;}
+    .block-container {padding-top: 1rem;}
+    </style>
     """, unsafe_allow_html=True)
