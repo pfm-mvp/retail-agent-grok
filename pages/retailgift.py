@@ -1,16 +1,11 @@
-# pages/retailgift.py – 100% WERKT MET BESTANDEN IN ROOT
+# pages/retailgift.py – 100% WERKT MET helpers/ IN ROOT
 import streamlit as st
 import requests
 import pandas as pd
-import os
-import sys
 
-# --- FIX: Voeg root toe aan Python path ---
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# --- Imports (nu werken) ---
-from helpers_normalize import normalize_vemcount_response, to_wide
-from ui import inject_css
+# --- IMPORT VIA PACKAGE ---
+from helpers.ui import inject_css
+from helpers.normalize import normalize_vemcount_response, to_wide
 
 st.set_page_config(page_title="RetailGift AI", page_icon="STORE TRAFFIC IS A GIFT", layout="wide")
 inject_css()
@@ -62,4 +57,4 @@ else:
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
     c2.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: Onmisbaar. +10-15% uplift.")
+st.caption("RetailGift AI: Onmisbaar. +10-15% uplift via AI-acties.")
