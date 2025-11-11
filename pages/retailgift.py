@@ -1,9 +1,11 @@
-# pages/retailgift.py – FINAL & WERKT
+# pages/retailgift.py – FINAL & RAW `[]`
 import streamlit as st
 import requests
 import pandas as pd
 import os
 import sys
+from urllib.parse import urlencode
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from helpers.ui import inject_css, kpi_card
@@ -33,19 +35,36 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN ---
-params = [("period", period), ("step", "day")]
+# --- 4. KPIs OPVRAGEN – RAW `data[]` MET safe='[]' ---
+params = [
+    ("period", period),
+    ("step", "day")
+]
 for sid in shop_ids:
     params.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
     params.append(("data_output[]", output))
 
-data_response = requests.post(f"{API_BASE}/get-report", params=params)
-df = to_wide(normalize_vemcount_response(data_response.json()))
+# GEBRUIK urlencode MET safe='[]' → `data[]=29641`
+query_string = urlencode(params, doseq=True, safe='[]')
 
-# --- 5. CHECK DATA ---
+data_response = requests.post(
+    f"{API_BASE}/get-report?{query_string}"
+)
+raw_json = data_response.json()
+
+# --- DEBUG: ZIE EXACTE CALL & RESPONSE ---
+st.subheader("DEBUG: API URL")
+st.code(data_response.url, language="text")
+
+st.subheader("DEBUG: Raw Response")
+st.json(raw_json, expanded=False)
+
+# --- 5. NORMALISEER ---
+df = to_wide(normalize_vemcount_response(raw_json))
+
 if df.empty:
-    st.error(f"Geen data voor {period}. Probeer 'today' of andere vestiging.")
+    st.error(f"Geen data voor {period}. Probeer 'today'.")
     st.stop()
 
 # --- 6. NAME ---
@@ -84,4 +103,4 @@ else:
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
-st.caption("RetailGift AI: 100% LIVE. +10-15% uplift.")
+st.caption("RetailGift AI: 100% LIVE. `data[]` letterlijk in URL.")
