@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & RAW `[]`
+# pages/retailgift.py – FINAL & `[]` IN BODY (geen %5B%5D)
 import streamlit as st
 import requests
 import pandas as pd
@@ -35,29 +35,34 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – RAW `data[]` MET safe='[]' ---
-params = [
-    ("period", period),
-    ("step", "day")
-]
+# --- 4. KPIs OPVRAGEN – `data[]` IN BODY (geen encoding) ---
+form_data = []
+form_data.append(("period", period))
+form_data.append(("step", "day"))
 for sid in shop_ids:
-    params.append(("data[]", sid))
+    form_data.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
-    params.append(("data_output[]", output))
+    form_data.append(("data_output[]", output))
 
-# GEBRUIK urlencode MET safe='[]' → `data[]=29641`
-query_string = urlencode(params, doseq=True, safe='[]')
+# GEBRUIK urlencode MET safe='[]' → `data[]=29641` letterlijk
+body = urlencode(form_data, doseq=True, safe='[]')
+
+headers = {
+    "Content-Type": "application/x-www-form-urlencoded"
+}
 
 data_response = requests.post(
-    f"{API_BASE}/get-report?{query_string}"
+    f"{API_BASE}/get-report",
+    data=body,
+    headers=headers
 )
 raw_json = data_response.json()
 
-# --- DEBUG: ZIE EXACTE CALL & RESPONSE ---
-st.subheader("DEBUG: API URL")
-st.code(data_response.url, language="text")
+# --- DEBUG ---
+st.subheader("DEBUG: Request Body (letterlijk)")
+st.code(body, language="text")
 
-st.subheader("DEBUG: Raw Response")
+st.subheader("DEBUG: API Response")
 st.json(raw_json, expanded=False)
 
 # --- 5. NORMALISEER ---
@@ -103,4 +108,4 @@ else:
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
-st.caption("RetailGift AI: 100% LIVE. `data[]` letterlijk in URL.")
+st.caption("RetailGift AI: `data[]` letterlijk in BODY.")
