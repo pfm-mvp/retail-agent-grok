@@ -11,7 +11,6 @@ def extract_latest_date_data(shop_info: Dict) -> Dict:
     date_entry = dates.get(latest_date, {})
     day_data = date_entry.get("data", {})
     
-    # String to int/float
     count_in_str = day_data.get("count_in", "0")
     count_in = int(count_in_str) if count_in_str.isdigit() else 0
     
@@ -36,10 +35,7 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
             }
             rows.append(row)
     
-    df = pd.DataFrame(rows)
-    if df.empty:
-        st.warning("Geen data in API response.")
-    return df
+    return pd.DataFrame(rows)  # <-- GEEN st.warning
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
     return df
