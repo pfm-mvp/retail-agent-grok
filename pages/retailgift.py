@@ -1,9 +1,10 @@
-# pages/retailgift.py – FINAL & `[]` LETTERLIJK IN URL
+# pages/retailgift.py – FINAL & `[]` LETTERLIJK (NO %5B%5D)
 import streamlit as st
 import requests
 import pandas as pd
 import os
 import sys
+from urllib.parse import quote
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -34,16 +35,16 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – MANUAL URL MET `[]` LETTERLIJK ---
+# --- 4. KPIs OPVRAGEN – MANUAL URL MET quote('[]') ---
 base_url = f"{API_BASE}/get-report"
 query_parts = [
     f"period={period}",
     "step=day"
 ]
 for sid in shop_ids:
-    query_parts.append(f"data[]={sid}")
+    query_parts.append(f"data{quote('[]')}={sid}")
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
-    query_parts.append(f"data_output[]={output}")
+    query_parts.append(f"data_output{quote('[]')}={output}")
 
 full_url = f"{base_url}?{'&'.join(query_parts)}"
 
@@ -100,4 +101,4 @@ else:
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
-st.caption("RetailGift AI: `[]` letterlijk in URL. Geen %5B%5D.")
+st.caption("RetailGift AI: `[]` letterlijk via quote. Geen %5B%5D.")
