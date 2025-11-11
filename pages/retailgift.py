@@ -4,7 +4,6 @@ import requests
 import pandas as pd
 import os
 import sys
-from urllib.parse import quote
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -35,20 +34,27 @@ shop_ids = [loc["id"] for loc in selected_locations]
 # --- 3. PERIODE ---
 period = st.selectbox("Periode", ["yesterday", "today", "this_week"], index=0)
 
-# --- 4. KPIs OPVRAGEN – MANUAL URL MET quote('[]') ---
+# --- 4. KPIs OPVRAGEN – MANUAL URL MET LETTERLIJKE `[]` ---
 base_url = f"{API_BASE}/get-report"
 query_parts = [
     f"period={period}",
     "step=day"
 ]
 for sid in shop_ids:
-    query_parts.append(f"data{quote('[]')}={sid}")
+    query_parts.append(f"data[]={sid}")
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
-    query_parts.append(f"data_output{quote('[]')}={output}")
+    query_parts.append(f"data_output[]={output}")
 
 full_url = f"{base_url}?{'&'.join(query_parts)}"
 
-data_response = requests.get(full_url)
+# GEBRUIK PREPARED REQUEST OM ENCODE TE OVERSLAAN
+req = requests.Request('GET', full_url)
+prepared = req.prepare()
+prepared.url = full_url  # force letterlijke URL
+
+with requests.Session() as s:
+    data_response = s.send(prepared)
+
 raw_json = data_response.json()
 
 # --- DEBUG ---
@@ -101,4 +107,4 @@ else:
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
-st.caption("RetailGift AI: `[]` letterlijk via quote. Geen %5B%5D.")
+st.caption("RetailGift AI: `[]` letterlijk via prepared request. Geen %5B%5D.")
