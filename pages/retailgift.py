@@ -1,6 +1,6 @@
-# pages/retailgift.py – FINAL & `[]` LETTERLIJK (NO %5B%5D)
+# pages/retailgift.py – FINAL & `[]` LETTERLIJK MET HTTPX
 import streamlit as st
-import requests
+import httpx
 import pandas as pd
 import os
 import sys
@@ -18,12 +18,12 @@ API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON_URL = st.secrets["clients_json_url"]
 
 # --- 1. KLANTEN ---
-clients = requests.get(CLIENTS_JSON_URL).json()
+clients = httpx.get(CLIENTS_JSON_URL).json()
 client = st.selectbox("Kies klant", clients, format_func=lambda x: f"{x['name']} ({x['brand']})")
 client_id = client["company_id"]
 
 # --- 2. LOCATIES ---
-locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
+locations = httpx.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
 selected_locations = st.multiselect(
     "Vestiging(en)", locations,
     format_func=lambda x: f"{x['name']} – {x.get('zip', 'Onbekend')}",
@@ -47,14 +47,9 @@ for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
 
 full_url = f"{base_url}?{'&'.join(query_parts)}"
 
-# GEBRUIK PREPARED REQUEST OM ENCODE TE OVERSLAAN
-req = requests.Request('GET', full_url)
-prepared = req.prepare()
-prepared.url = full_url  # force letterlijke URL
-
-with requests.Session() as s:
-    data_response = s.send(prepared)
-
+# GEBRUIK HTTPX → GEEN ENCODE VAN `[]`
+with httpx.Client(transport=httpx.HTTPTransport(retries=1)) as client:
+    data_response = client.get(full_url, follow_redirects=True)
 raw_json = data_response.json()
 
 # --- DEBUG ---
@@ -107,4 +102,4 @@ else:
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
-st.caption("RetailGift AI: `[]` letterlijk via prepared request. Geen %5B%5D.")
+st.caption("RetailGift AI: `[]` letterlijk met httpx. Geen %5B%5D.")
