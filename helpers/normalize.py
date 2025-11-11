@@ -1,20 +1,19 @@
 import pandas as pd
 from typing import Dict
 
-def extract_latest_date_data(shop_data: Dict) -> Dict:
-    dates = shop_data.get("dates", {})
+def extract_latest_date_data(shop_info: Dict) -> Dict:
+    """Parse geneste dates uit shop_info"""
+    dates = shop_info.get("dates", {})
     if not dates:
         return {"count_in": 0, "conversion_rate": 0.0, "turnover": 0, "sales_per_visitor": 0.0}
     
+    # Neem laatste datum
     latest_date = sorted(dates.keys())[-1]
     date_entry = dates.get(latest_date, {})
     day_data = date_entry.get("data", {})
     
-    count_in_str = day_data.get("count_in", "0")
-    count_in = int(count_in_str) if count_in_str else 0
-    
     return {
-        "count_in": count_in,
+        "count_in": int(day_data.get("count_in", 0) or 0),
         "conversion_rate": float(day_data.get("conversion_rate", 0) or 0) * 100,
         "turnover": float(day_data.get("turnover", 0) or 0),
         "sales_per_visitor": float(day_data.get("sales_per_visitor", 0) or 0)
@@ -23,15 +22,22 @@ def extract_latest_date_data(shop_data: Dict) -> Dict:
 def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
     data = response.get("data", {})
     rows = []
-    for period in data.values():
-        for shop_id, shop_info in period.items():
+    
+    # Loop door periodes (yesterday, today, etc.)
+    for period, shops in data.items():
+        for shop_id_str, shop_info in shops.items():
+            shop_id = int(shop_id_str)
             kpi_data = extract_latest_date_data(shop_info)
             row = {
-                "shop_id": int(shop_id),
-                **kpi_data  # <--- Gebruik ** om shop_id te behouden
+                "shop_id": shop_id,
+                **kpi_data
             }
             rows.append(row)
-    return pd.DataFrame(rows)
+    
+    df = pd.DataFrame(rows)
+    if df.empty:
+        st.warning("Geen data gevonden in API response.")
+    return df
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
     return df
