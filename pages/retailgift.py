@@ -70,7 +70,12 @@ else:
     use_custom_dates = True
 
 # --- Dynamische period_step ---
-period_step = "day" if use_custom_dates or period == "yesterday" else "total"
+if period == "yesterday":
+    period_step = "total"        # 1 dag → API geeft direct total
+elif use_custom_dates:
+    period_step = "day"          # custom → per dag (wij kunnen later total forceren)
+else:
+    period_step = "day"          # ALLE fixed: last_month, this_week, etc. → day
 
 # --- 4. KPIs Ophalen (huidige periode) ---
 query_parts = [f"period={period}", "source=shops"]
