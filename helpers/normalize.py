@@ -1,8 +1,8 @@
-# helpers/normalize.py – FINAL & ZONDER step parameter
+# helpers/normalize.py – FINAL & STEP-SAFE
 import pandas as pd
 from typing import Dict
 
-def extract_latest_date_data(shop_info: Dict) -> Dict:
+def extract_latest_date_data(shop_info: Dict, step: str = "day") -> Dict:
     dates = shop_info.get("dates", {})
     if not dates:
         return {"count_in": 0, "conversion_rate": 0.0, "turnover": 0.0, "sales_per_visitor": 0.0}
@@ -19,10 +19,9 @@ def extract_latest_date_data(shop_info: Dict) -> Dict:
             return default
 
     conv = safe_float("conversion_rate", 0.0)
-    # API geeft altijd % bij step=day, fractie bij step=total → maar we forceren % via data
-    # Als conv < 1.0 → vermenigvuldig met 100 (total)
-    if conv <= 1.0:
-        conv *= 1
+    # Alleen *100 bij step=total (fractie)
+    if step == "total" and conv <= 1.0:
+        conv *= 100
 
     return {
         "count_in": int(safe_float("count_in", 0)),
@@ -31,7 +30,7 @@ def extract_latest_date_data(shop_info: Dict) -> Dict:
         "sales_per_visitor": safe_float("sales_per_visitor", 0.0)
     }
 
-def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
+def normalize_vemcount_response(response: Dict, step: str = "day") -> pd.DataFrame:
     data = response.get("data", {})
     rows = []
     
@@ -41,7 +40,7 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
                 shop_id = int(shop_id_str)
             except:
                 continue
-            kpi_data = extract_latest_date_data(shop_info)
+            kpi_data = extract_latest_date_data(shop_info, step=step)
             row = {"shop_id": shop_id, **kpi_data}
             rows.append(row)
     
