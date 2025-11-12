@@ -1,6 +1,6 @@
-# pages/retailgift.py – RetailGift AI Dashboard v2.1
-# McKinsey retail inzichten: Footfall → conversie uplift via Ryski + weer
-# Data: Vemcount via FastAPI | CBS hardcode fallback (-27)
+# pages/retailgift.py – RetailGift AI Dashboard v2.2
+# McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
+# Data: Vemcount via FastAPI | CBS hardcode (-27)
 
 import streamlit as st
 import requests
@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from helpers.ui import inject_css, kpi_card
 from helpers.normalize import normalize_vemcount_response, to_wide
 
-st.set_page_config(page_title="RetailGift AI", page_icon="🛒", layout="wide")
+st.set_page_config(page_title="RetailGift AI", page_icon="STORE TRAFFIC IS A GIFT", layout="wide")
 inject_css()
 
 # --- SECRETS ---
@@ -29,7 +29,7 @@ if not client_id:
 # --- 2. Vestigingen Selectie ---
 try:
     locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
-except Exception as e:
+except Exception:
     st.error("Kon locaties niet ophalen.")
     st.stop()
 
@@ -71,7 +71,7 @@ st.code(full_url, language="text")
 st.subheader("DEBUG: Raw Response")
 st.json(raw_json, expanded=False)
 
-# --- 5. Normalize Data ---
+# --- 5. Normalize Data MET STEP ---
 df = to_wide(normalize_vemcount_response(raw_json, step=step))
 
 if df.empty:
@@ -89,8 +89,8 @@ st.title("STORE TRAFFIC IS A GIFT")
 client_name = client.get("name", "Onbekende Klant")
 st.markdown(f"**{client_name}** – *Mark Ryski* (CBS vertrouwen: -27, Q3 non-food +3.5%)")
 
-# --- Weer impact fallback ---
-weather_impact = "-4% footfall"  # nov regen avg
+# --- Fallbacks ---
+weather_impact = "-4% footfall"
 koopbereidheid = "-14"
 q3_trend = "+3.5%"
 
@@ -100,11 +100,11 @@ if role == "Store Manager" and len(selected) == 1:
 
     col1, col2, col3, col4 = st.columns(4)
     with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", weather_impact, "primary")
-    with col2: kpi_card("Conversie", f"{row['conversion_rate']:.2f}%", f"CBS {koopbereidheid} koopbereidheid", "bad" if row['conversion_rate'] < 25 else "good")
+    with col2: kpi_card("Conversie", f"{row['conversion_rate']:.2f}%", f"CBS {koopbereidheid} koopb.", "bad" if row['conversion_rate'] < 25 else "good")
     with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", f"Q3 {q3_trend}", "good")
     with col4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "", "neutral")
 
-    st.success("**Actie:** +2 FTE 12-18u → +5-10% conversie (Ryski Ch3). Indoor bundel bij regen.")
+    st.success("**Actie:** +2 FTE 12-18u → +5-10% conversie (Ryski Ch3).")
 
 elif role == "Regio Manager":
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
@@ -115,7 +115,7 @@ elif role == "Regio Manager":
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", f"Q3 {q3_trend}")
 
     st.dataframe(df[["name", "count_in", "conversion_rate"]].sort_values("conversion_rate", ascending=False))
-    st.success("**Actie:** Audit stores <20% → labor align → +10% uplift (Ryski Ch3).")
+    st.success("**Actie:** Audit stores <20% → labor align → +10% uplift.")
 
 else:  # Directie
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
@@ -125,6 +125,6 @@ else:  # Directie
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.2f}%", "CBS -27")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", f"Q3 {q3_trend}")
 
-    st.success("**Actie:** +15% digital budget droge dagen – ROI 3.8x (Ryski Ch7).")
+    st.success("**Actie:** +15% digital budget droge dagen – ROI 3.8x.")
 
 st.caption("RetailGift AI: Vemcount + Ryski + CBS fallback. +10-15% uplift.")
