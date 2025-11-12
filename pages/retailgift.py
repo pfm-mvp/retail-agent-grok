@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v2.7
+# pages/retailgift.py – RetailGift AI Dashboard v2.8
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | CBS hardcode (-27)
 
@@ -7,7 +7,7 @@ import requests
 import pandas as pd
 from urllib.parse import urlencode
 
-from helpers.ui import inject_css
+from helpers.ui import inject_css, kpi_card
 from helpers.normalize import normalize_vemcount_response, to_wide
 
 st.set_page_config(page_title="RetailGift AI", page_icon="🛒", layout="wide")
@@ -98,15 +98,11 @@ if role == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     st.header(f"{row['name']} – {period.capitalize()}")
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("Footfall", f"{int(row['count_in']):,}", weather_impact)
-    with c2:
-        st.metric("Conversie", f"{row['conversion_rate']:.2f}%", f"CBS {koopbereidheid} koopb.")
-    with c3:
-        st.metric("Omzet", f"€{int(row['turnover']):,}", f"Q3 {q3_trend}")
-    with c4:
-        st.metric("SPV", f"€{row['sales_per_visitor']:.2f}")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", weather_impact, "primary")
+    with col2: kpi_card("Conversie", f"{row['conversion_rate']:.2f}%", f"CBS {koopbereidheid} koopb.", "bad" if row['conversion_rate'] < 25 else "good")
+    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", f"Q3 {q3_trend}", "good")
+    with col4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "", "neutral")
 
     st.success("**Actie:** +2 FTE 12-18u → +5-10% conversie (Ryski Ch3).")
 
