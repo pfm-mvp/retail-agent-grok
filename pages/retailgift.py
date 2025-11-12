@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v6.1 FINAL
+# pages/retailgift.py – RetailGift AI Dashboard v7.0 FINAL
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather (LIVE) | CBS hardcode (-27)
 
@@ -6,7 +6,7 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
-from collections import defaultdict  # <-- GEVIXT: toegevoegd
+from collections import defaultdict
 import os
 import sys
 
@@ -50,6 +50,7 @@ zip_code = selected[0].get("zip", "1000AA") if selected else "1000AA"
 
 # --- 3. Periode Selectie (Fixed + Custom) ---
 period_type = st.selectbox("Periode type", ["Fixed (Vemcount)", "Custom datum"], index=0)
+
 if period_type == "Fixed (Vemcount)":
     period_options = [
         "yesterday", "this_week", "last_week",
@@ -58,6 +59,7 @@ if period_type == "Fixed (Vemcount)":
     ]
     period = st.selectbox("Vaste periode", period_options, index=0)
     form_date_from = form_date_to = None
+    use_custom_dates = False
 else:
     col1, col2 = st.columns(2)
     with col1:
@@ -65,13 +67,14 @@ else:
     with col2:
         form_date_to = st.date_input("Tot datum", value=datetime.today())
     period = "date"
+    use_custom_dates = True
 
 # --- Dynamische step ---
-step = "day" if period_type == "Custom datum" or period == "yesterday" else "total"
+step = "day" if use_custom_dates or period == "yesterday" else "total"
 
 # --- 4. KPIs Ophalen (huidige periode) ---
 query_parts = [f"period={period}"]
-if period == "date":
+if use_custom_dates:
     query_parts.append(f"form_date_from={form_date_from.strftime('%Y-%m-%d')}")
     query_parts.append(f"form_date_to={form_date_to.strftime('%Y-%m-%d')}")
 
@@ -152,7 +155,7 @@ except:
 
 hist_df = to_wide(normalize_vemcount_response(hist_raw))
 
-weekday_avg = defaultdict(dict)  # <-- NU WERKT
+weekday_avg = defaultdict(dict)
 if not hist_df.empty and 'date' in hist_df.columns:
     try:
         hist_df['date'] = pd.to_datetime(hist_df['date'])
