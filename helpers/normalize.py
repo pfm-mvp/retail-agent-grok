@@ -1,47 +1,71 @@
-# helpers/normalize.py – FINAL & NO *100, NO /100
+# helpers/normalize.py
 import pandas as pd
-from typing import Dict
 
-def extract_latest_date_data(shop_info: Dict) -> Dict:
-    dates = shop_info.get("dates", {})
-    if not dates:
-        return {"count_in": 0, "conversion_rate": 0.0, "turnover": 0.0, "sales_per_visitor": 0.0}
-    
-    latest_date = sorted(dates.keys())[-1]
-    date_entry = dates.get(latest_date, {})
-    day_data = date_entry.get("data", {})
+def to_wide(data):
+    if not data or "data" not in data:
+        return pd.DataFrame()
 
-    def safe_float(key, default=0.0):
-        val = day_data.get(key)
-        try:
-            return float(val) if val is not None else default
-        except (ValueError, TypeError):
-            return default
+    records = []
+    for period_key, shops in data["data"].items():
+        for shop_id, shop_data in shops.items():
+            shop_info = shop_data.get("data", {})
+            dates = shop_data.get("dates", {})
+            for date_key, date_data in dates.items():
+                row = {
+                    "shop_id": shop_id,
+                    "period": period_key,
+                    "date": date_key,
+                    **shop_info,
+                    **date_data.get("data", {})
+                }
+                records.append(row)
 
-    conv = safe_float("conversion_rate", 0.0)
-    # API GEEFT ALTIJD % → GEEN *100, GEEN /100
-    return {
-        "count_in": int(safe_float("count_in", 0)),
-        "conversion_rate": round(conv, 2),
-        "turnover": safe_float("turnover", 0.0),
-        "sales_per_visitor": safe_float("sales_per_visitor", 0.0)
-    }
+    df = pd.DataFrame(records)
 
-def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
-    data = response.get("data", {})
-    rows = []
-    
-    for period, shops in data.items():
-        for shop_id_str, shop_info in shops.items():
-            try:
-                shop_id = int(shop_id_str)
-            except:
-                continue
-            kpi_data = extract_latest_date_data(shop_info)
-            row = {"shop_id": shop_id, **kpi_data}
-            rows.append(row)
-    
-    return pd.DataFrame(rows)
+    if df.empty:
+        return df
 
-def to_wide(df: pd.DataFrame) -> pd.DataFrame:
+    # --- FORCEER TOTAL RIJ VOOR FIXED PERIODES ---
+    fixed_periods = [
+        "last_month", "this_month",
+        "last_week", "this_week",
+        "last_quarter", "this_quarter",
+        "last_year", "this_year"
+    ]
+
+    if df["period"].iloc[0] in fixed_periods:
+        # Filter alleen echte dagen (geen "total")
+        day_df = df[~df["date"].str.contains("total", case=False, na=False)]
+        if not day_df.empty:
+            # --- CORRECTE AGGREGATIE ---
+            total_agg = day_df.agg({
+                "count_in": "sum",
+                "turnover": "sum",
+                # Gewogen gemiddelde voor conversie & SPV
+                "conversion_rate": "mean",
+                "sales_per_visitor": "mean"
+            }).to_dict()
+
+            # SPV = omzet / footfall → herbereken voor zekerheid
+            total_footfall = total_agg["count_in"]
+            total_turnover = total_agg["turnover"]
+            if total_footfall > 0:
+                total_agg["sales_per_visitor"] = round(total_turnover / total_footfall, 2)
+
+            total_agg.update({
+                "shop_id": day_df["shop_id"].iloc[0],
+                "period": day_df["period"].iloc[0],
+                "date": "total",
+                "name": day_df.get("name", shop_id).iloc[0] if "name" in day_df.columns else shop_id
+            })
+
+            # Voeg total rij toe
+            df = pd.concat([df, pd.DataFrame([total_agg])], ignore_index=True)
+
+    # Converteer naar numeriek
+    numeric_cols = ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
     return df
