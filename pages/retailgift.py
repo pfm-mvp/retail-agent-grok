@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v4.2 FINAL
+# pages/retailgift.py – RetailGift AI Dashboard v4.3 FINAL
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather | CBS hardcode (-27)
 
@@ -30,7 +30,7 @@ clients = requests.get(CLIENTS_JSON).json()
 client = st.selectbox("Retailer", clients, format_func=lambda x: f"{x.get('name', 'Onbekend')} ({x.get('brand', 'Onbekend')})")
 client_id = client.get("company_id")
 
-if not Bloomfield:
+if not client_id:  # <-- GEVIXT: was 'Bloomfield'
     st.error("Geen klant geselecteerd.")
     st.stop()
 
@@ -60,7 +60,7 @@ period = st.selectbox("Periode", period_options, index=0)
 # --- 4. KPIs Ophalen (huidig) ---
 query_parts = [f"period={period}"]
 if "week" in period or "month" in period or "quarter" in period or "year" in period:
-    query_parts.append("step=day")  # Force day voor grafiek/forecast
+    query_parts.append("step=day")
 for sid in shop_ids:
     query_parts.append(f"data[]={sid}")
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
