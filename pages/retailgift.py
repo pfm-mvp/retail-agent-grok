@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v7.0 FINAL
+# pages/retailgift.py – RetailGift AI Dashboard v8.0 FINAL
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather (LIVE) | CBS hardcode (-27)
 
@@ -73,11 +73,10 @@ else:
 step = "day" if use_custom_dates or period == "yesterday" else "total"
 
 # --- 4. KPIs Ophalen (huidige periode) ---
-query_parts = [f"period={period}"]
+query_parts = [f"period={period}", "source=shops"]  # <-- GEVIXT
 if use_custom_dates:
     query_parts.append(f"form_date_from={form_date_from.strftime('%Y-%m-%d')}")
     query_parts.append(f"form_date_to={form_date_to.strftime('%Y-%m-%d')}")
-
 query_parts.append(f"step={step}")
 for sid in shop_ids:
     query_parts.append(f"data[]={sid}")
@@ -137,6 +136,7 @@ start_date = (datetime.today() - timedelta(days=28)).strftime("%Y-%m-%d")
 
 hist_query = [
     "period=date",
+    "source=shops",  # <-- GEVIXT
     f"form_date_from={start_date}",
     f"form_date_to={end_date}",
     "step=day"
