@@ -87,7 +87,7 @@ role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"], index
 # --- 7. UI per Rol ---
 st.title("STORE TRAFFIC IS A GIFT")
 client_name = client.get("name", "Onbekende Klant")
-st.markdown(f"**{client_name}** – *Mark Ryski* (CBS vertrouwen: -27, Q3 non-food +3.5%)")
+st.markdown(f"**{client_name}Marktsentiment (CBS vertrouwen: -27, Q3 non-food +3.5%)")
 
 # --- Fallbacks ---
 weather_impact = "-4% footfall" if "regen" in get_weather(selected[0].get("zip", "1000AA"))["desc"] else "+5% footfall"
