@@ -22,7 +22,7 @@ def extract_latest_date_data(shop_info: Dict) -> Dict:
     # API geeft altijd % bij step=day, fractie bij step=total → maar we forceren % via data
     # Als conv < 1.0 → vermenigvuldig met 100 (total)
     if conv <= 1.0:
-        conv *= 100
+        conv *= 1
 
     return {
         "count_in": int(safe_float("count_in", 0)),
