@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v3.1
+# pages/retailgift.py – RetailGift AI Dashboard v3.0
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | CBS hardcode (-27)
 
@@ -6,11 +6,8 @@ import streamlit as st
 import requests
 import pandas as pd
 from urllib.parse import urlencode
-import os
-import sys
-
-# --- FIX: Python path ---
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 from helpers.ui import inject_css, kpi_card
 from helpers.normalize import normalize_vemcount_response, to_wide
@@ -20,7 +17,29 @@ inject_css()
 
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
+OPENWEATHER_KEY = st.secrets["openweather_api_key"]
 CLIENTS_JSON = st.secrets["clients_json_url"]
+
+# --- CBS Fallback ---
+cbs_trust = -27
+koopbereidheid = -14
+
+# --- Weer Forecast (7+7 dagen) ---
+@st.cache_data(ttl=3600)
+def get_weather_forecast(zip_code: str, days: int = 14):
+    url = f"https://api.openweathermap.org/data/2.5/forecast?zip={zip_code},NL&appid={OPENWEATHER_KEY}&units=metric"
+    r = requests.get(url)
+    if r.ok:
+        data = r.json()["list"]
+        forecast = []
+        for entry in data[:days*8]:
+            d = entry["dt_txt"][:10]
+            temp = entry["main"]["temp"]
+            desc = entry["weather"][0]["description"]
+            impact = -4 if "regen" in desc else +5
+            forecast.append({"date": d, "temp": round(temp), "desc": desc, "impact": f"{impact}% footfall"})
+        return forecast
+    return [{"date": "Nov 12", "temp": 8, "desc": "motregen", "impact": "-4% footfall"}] * 14
 
 # --- 1. Klant Selectie ---
 clients = requests.get(CLIENTS_JSON).json()
@@ -70,12 +89,6 @@ full_url = f"{API_BASE}/get-report?{'&'.join(query_parts)}"
 data_response = requests.get(full_url)
 raw_json = data_response.json()
 
-# --- DEBUG ---
-st.subheader("DEBUG: API URL")
-st.code(full_url, language="text")
-st.subheader("DEBUG: Raw Response")
-st.json(raw_json, expanded=False)
-
 # --- 5. Normalize Data ---
 df = to_wide(normalize_vemcount_response(raw_json))
 
@@ -94,8 +107,7 @@ st.title("STORE TRAFFIC IS A GIFT")
 client_name = client.get("name", "Onbekende Klant")
 st.markdown(f"**{client_name}** – *Mark Ryski* (CBS vertrouwen: -27, Q3 non-food +3.5%)")
 
-# --- HARDCODE WEER (tijdelijk) ---
-# Nov 12: regen → -4% footfall
+# --- Fallbacks ---
 weather_impact = "-4% footfall"
 koopbereidheid = "-14"
 q3_trend = "+3.5%"
@@ -105,9 +117,9 @@ if role == "Store Manager" and len(selected) == 1:
     st.header(f"{row['name']} – {period.capitalize()}")
 
     col1, col2, col3, col4, col5 = st.columns(5)
-    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", weather_impact, "primary")
+    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", "Bezoekers", "primary")
     with col2: kpi_card("Conversie", f"{row['conversion_rate']:.2f}%", "Koopgedrag", "bad" if row['conversion_rate'] < 25 else "good")
-    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", f"Q3 {q3_trend}", "good")
+    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "Dagtotal", "good")
     with col4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "Per bezoeker", "neutral")
     with col5: kpi_card("CBS Stats", "Vertrouwen: -27", f"Koopbereidheid: {koopbereidheid}", "danger")
 
