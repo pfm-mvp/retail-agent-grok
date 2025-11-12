@@ -1,6 +1,5 @@
 # helpers/normalize.py
 import pandas as pd
-from collections import defaultdict
 
 def to_wide(data):
     if not data or "data" not in data:
