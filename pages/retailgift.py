@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v2.8
+# pages/retailgift.py – RetailGift AI Dashboard v2.9
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | CBS hardcode (-27)
 
@@ -6,6 +6,11 @@ import streamlit as st
 import requests
 import pandas as pd
 from urllib.parse import urlencode
+import os
+import sys
+
+# --- FIX: Voeg project root toe aan Python path ---
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from helpers.ui import inject_css, kpi_card
 from helpers.normalize import normalize_vemcount_response, to_wide
