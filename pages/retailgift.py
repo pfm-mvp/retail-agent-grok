@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v5.1 FINAL
+# pages/retailgift.py – RetailGift AI Dashboard v6.0 FINAL
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather (LIVE) | CBS hardcode (-27)
 
@@ -6,6 +6,7 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
+from collections import defaultdict
 import os
 import sys
 
@@ -47,16 +48,31 @@ selected = st.multiselect(
 shop_ids = [loc["id"] for loc in selected if "id" in loc]
 zip_code = selected[0].get("zip", "1000AA") if selected else "1000AA"
 
-# --- 3. Periode Selectie ---
-period_options = [
-    "yesterday", "this_week", "last_week",
-    "this_month", "last_month",
-    "this_quarter", "last_quarter", "this_year"
-]
-period = st.selectbox("Periode", period_options, index=0)
+# --- 3. Periode Selectie (Fixed + Custom) ---
+period_type = st.radio("Periode", ["Fixed", "Custom datum"], horizontal=True)
 
-# --- 4. KPIs Ophalen (huidig) ---
+if period_type == "Fixed":
+    period_options = [
+        "yesterday", "this_week", "last_week",
+        "this_month", "last_month",
+        "this_quarter", "last_quarter", "this_year"
+    ]
+    period = st.selectbox("Kies periode", period_options, index=0)
+    use_date_range = False
+else:
+    col1, col2 = st.columns(2)
+    with col1:
+        form_date_from = st.date_input("Van", value=datetime.today() - timedelta(days=28))
+    with col2:
+        form_date_to = st.date_input("Tot", value=datetime.today())
+    period = "date"
+    use_date_range = True
+
+# --- 4. KPIs Ophalen (huidige periode) ---
 query_parts = [f"period={period}"]
+if use_date_range:
+    query_parts.append(f"form_date_from={form_date_from.strftime('%Y-%m-%d')}")
+    query_parts.append(f"form_date_to={form_date_to.strftime('%Y-%m-%d')}")
 if period in ["this_week", "last_week", "this_month", "last_month", "this_quarter", "last_quarter", "this_year"]:
     query_parts.append("step=day")
 for sid in shop_ids:
@@ -107,27 +123,24 @@ def get_weather_forecast(zip_code: str):
             return forecast[:7]
     except:
         pass
-    st.warning("Weer API fout → demo data")
-    return [
-        {"date": (datetime.today() + timedelta(days=i)).strftime("%Y-%m-%d"), "temp": 8, "desc": "bewolkt", "impact": 0}
-        for i in range(7)
-    ]
+    return [{"date": (datetime.today() + timedelta(days=i)).strftime("%Y-%m-%d"), "temp": 8, "desc": "bewolkt", "impact": 0} for i in range(7)]
 
 forecast = get_weather_forecast(zip_code)
 
-# --- HISTORISCHE DATA: 28 DAGEN TERUG (period=date) ---
-end_date = datetime.today().strftime("%Y-%m-%d")  # <-- GEVIXT: %d
-start_date = (datetime.today() - timedelta(days=28)).strftime("%Y-%m-%d")  # <-- GEVIXT: %d
+# --- HISTORISCHE 28 DAGEN (alleen voor forecast) ---
+end_date = datetime.today().strftime("%Y-%m-%d")
+start_date = (datetime.today() - timedelta(days=28)).strftime("%Y-%m-%d")
 
 hist_query = [
     "period=date",
     f"form_date_from={start_date}",
     f"form_date_to={end_date}",
-    "step=day",
-    "data_output[]=count_in"
+    "step=day"
 ]
 for sid in shop_ids:
     hist_query.append(f"data[]={sid}")
+for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
+    hist_query.append(f"data_output[]={output}")
 
 hist_url = f"{API_BASE}/get-report?{'&'.join(hist_query)}"
 try:
@@ -136,35 +149,39 @@ try:
 except:
     hist_raw = {}
 
-# --- Normalize Historie ---
 hist_df = to_wide(normalize_vemcount_response(hist_raw))
 
-weekday_avg = {}
+weekday_avg = defaultdict(dict)
 if not hist_df.empty and 'date' in hist_df.columns:
     try:
         hist_df['date'] = pd.to_datetime(hist_df['date'])
         hist_df['weekday'] = hist_df['date'].dt.day_name()
-        weekday_avg = hist_df.groupby('weekday')['count_in'].mean().round().astype(int).to_dict()
+        for metric in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
+            weekday_avg[metric] = hist_df.groupby('weekday')[metric].mean().round(2).to_dict()
     except:
         pass
 
 # Fallback
-if not weekday_avg:
-    weekday_avg = {"Monday": 420, "Tuesday": 410, "Wednesday": 400, "Thursday": 380, "Friday": 450, "Saturday": 520, "Sunday": 360}
+fallback = {
+    "count_in": {"Monday": 420, "Tuesday": 410, "Wednesday": 400, "Thursday": 380, "Friday": 450, "Saturday": 520, "Sunday": 360},
+    "conversion_rate": {"Monday": 16.0, "Tuesday": 16.5, "Wednesday": 17.0, "Thursday": 15.5, "Friday": 18.0, "Saturday": 19.0, "Sunday": 15.0},
+    "turnover": {"Monday": 1325, "Tuesday": 1325, "Wednesday": 1325, "Thursday": 1325, "Friday": 1325, "Saturday": 1325, "Sunday": 1325},
+    "sales_per_visitor": {"Monday": 189.33, "Tuesday": 189.33, "Wednesday": 189.33, "Thursday": 189.33, "Friday": 189.33, "Saturday": 189.33, "Sunday": 189.33}
+}
+for metric, values in fallback.items():
+    if not weekday_avg[metric]:
+        weekday_avg[metric] = values
 
-# --- STORE MANAGER: FORECAST (neem LAATSTE DAG als basis) ---
+# --- STORE MANAGER ---
 if role == "Store Manager" and len(selected) == 1:
-    # Neem laatste beschikbare dag
-    df_sorted = df.sort_values('date', ascending=False) if 'date' in df.columns else df
-    row = df_sorted.iloc[0]
-
-    st.header(f"{row['name']} – {period.capitalize()}")
+    row = df.iloc[0] if len(df) > 0 else pd.Series()
+    st.header(f"{row.get('name', 'Onbekend')} – {period.capitalize()}")
 
     col1, col2, col3, col4 = st.columns(4)
-    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", "Laatste dag", "primary")
-    with col2: kpi_card("Conversie", f"{row['conversion_rate']:.2f}%", "Koopgedrag", "bad" if row['conversion_rate'] < 25 else "good")
-    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "Laatste dag", "good")
-    with col4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "Per bezoeker", "neutral")
+    with col1: kpi_card("Footfall", f"{int(row.get('count_in', 0)):,}", "Laatste dag", "primary")
+    with col2: kpi_card("Conversie", f"{row.get('conversion_rate', 0):.2f}%", "Koopgedrag", "bad" if row.get('conversion_rate', 0) < 25 else "good")
+    with col3: kpi_card("Omzet", f"€{int(row.get('turnover', 0)):,}", "Laatste dag", "good")
+    with col4: kpi_card("SPV", f"€{row.get('sales_per_visitor', 0):.2f}", "Per bezoeker", "neutral")
 
     st.markdown("---")
     st.subheader("**Deze Week: Forecast & Omzet Voorspelling**")
@@ -174,10 +191,12 @@ if role == "Store Manager" and len(selected) == 1:
 
     for day in forecast:
         weekday = datetime.strptime(day["date"], "%Y-%m-%d").strftime("%A")
-        hist_footfall = weekday_avg.get(weekday, 400)
+        hist_footfall = weekday_avg["count_in"].get(weekday, 400)
+        hist_conv = weekday_avg["conversion_rate"].get(weekday, 16.20)
+        hist_spv = weekday_avg["sales_per_visitor"].get(weekday, 189.33)
         weather_impact = day["impact"] / 100
         expected_footfall = int(hist_footfall * (1 + weather_impact))
-        expected_omzet = int(expected_footfall * (row['conversion_rate']/100) * row['sales_per_visitor'])
+        expected_omzet = int(expected_footfall * (hist_conv/100) * hist_spv)
         total_forecast_footfall += expected_footfall
         total_forecast_omzet += expected_omzet
 
@@ -194,7 +213,7 @@ if role == "Store Manager" and len(selected) == 1:
 
     st.markdown(f"**Totaal week: {total_forecast_footfall:,} footfall → €{total_forecast_omzet:,} omzet**")
 
-    actual_omzet = int(row['turnover']) * 7
+    actual_omzet = int(row.get('turnover', 0)) * 7
     diff = total_forecast_omzet - actual_omzet
     tone = "good" if diff > 0 else "bad"
     st.markdown(f"**Performance vs forecast: €{diff:+,}** → **{tone.upper()}**")
