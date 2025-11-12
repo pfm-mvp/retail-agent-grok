@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v2.6
+# pages/retailgift.py – RetailGift AI Dashboard v2.7
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | CBS hardcode (-27)
 
