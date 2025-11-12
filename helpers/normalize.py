@@ -1,4 +1,4 @@
-# helpers/normalize.py – FINAL & NO *100
+# helpers/normalize.py – FINAL & NO *100, NO /100
 import pandas as pd
 from typing import Dict
 
@@ -19,7 +19,7 @@ def extract_latest_date_data(shop_info: Dict) -> Dict:
             return default
 
     conv = safe_float("conversion_rate", 0.0)
-    # API geeft ALTIJD % → NOOIT *100
+    # API GEEFT ALTIJD % → GEEN *100, GEEN /100
     return {
         "count_in": int(safe_float("count_in", 0)),
         "conversion_rate": round(conv, 2),
