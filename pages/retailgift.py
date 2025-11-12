@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v3.0
+# pages/retailgift.py – RetailGift AI Dashboard v3.1
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | CBS hardcode (-27)
 
@@ -6,6 +6,11 @@ import streamlit as st
 import requests
 import pandas as pd
 from urllib.parse import urlencode
+import os
+import sys
+
+# --- FIX: Python path ---
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from helpers.ui import inject_css, kpi_card
 from helpers.normalize import normalize_vemcount_response, to_wide
@@ -20,7 +25,7 @@ CLIENTS_JSON = st.secrets["clients_json_url"]
 # --- 1. Klant Selectie ---
 clients = requests.get(CLIENTS_JSON).json()
 client = st.selectbox("Retailer", clients, format_func=lambda x: f"{x.get('name', 'Onbekend')} ({x.get('brand', 'Onbekend')})")
-client_id = client["company_id"]
+client_id = client.get("company_id")
 
 if not client_id:
     st.error("Geen klant geselecteerd.")
@@ -48,7 +53,7 @@ period_options = [
 ]
 period = st.selectbox("Periode", period_options, index=0)
 
-# --- Dynamische step (alleen voor API) ---
+# --- Dynamische step ---
 step = "day" if period == "yesterday" else "total"
 
 # --- 4. KPIs Ophalen ---
@@ -87,10 +92,11 @@ role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"], index
 # --- 7. UI per Rol ---
 st.title("STORE TRAFFIC IS A GIFT")
 client_name = client.get("name", "Onbekende Klant")
-st.markdown(f"**{client_name}Marktsentiment (CBS vertrouwen: -27, Q3 non-food +3.5%)")
+st.markdown(f"**{client_name}** – *Mark Ryski* (CBS vertrouwen: -27, Q3 non-food +3.5%)")
 
-# --- Fallbacks ---
-weather_impact = "-4% footfall" if "regen" in get_weather(selected[0].get("zip", "1000AA"))["desc"] else "+5% footfall"
+# --- HARDCODE WEER (tijdelijk) ---
+# Nov 12: regen → -4% footfall
+weather_impact = "-4% footfall"
 koopbereidheid = "-14"
 q3_trend = "+3.5%"
 
@@ -99,25 +105,24 @@ if role == "Store Manager" and len(selected) == 1:
     st.header(f"{row['name']} – {period.capitalize()}")
 
     col1, col2, col3, col4, col5 = st.columns(5)
-    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", "Bezoekers", "primary")
+    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", weather_impact, "primary")
     with col2: kpi_card("Conversie", f"{row['conversion_rate']:.2f}%", "Koopgedrag", "bad" if row['conversion_rate'] < 25 else "good")
-    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "Dagtotal", "good")
+    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", f"Q3 {q3_trend}", "good")
     with col4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "Per bezoeker", "neutral")
-    with col5: kpi_card("CBS Stats", "Vertrouwen: -27", f"Koopbereidheid: {koopbereidheid}", "danger" if cbs_trust < -25 else "neutral")
+    with col5: kpi_card("CBS Stats", "Vertrouwen: -27", f"Koopbereidheid: {koopbereidheid}", "danger")
 
     st.success("**Actie:** +2 FTE 12-18u → +5-10% conversie (Ryski Ch3).")
 
 elif role == "Regio Manager":
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
     st.header(f"Regio – {period.capitalize()}")
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}", weather_impact)
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.2f}%", f"CBS {koopbereidheid} koopb.")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", f"Q3 {q3_trend}")
-    c4.metric("CBS Stats", "Vertrouwen: -27", f"Koopbereidheid: {koopbereidheid}", delta="-5% vs vorig maand", delta_color="inverse" if cbs_trust < -25 else "normal")
 
     st.dataframe(df[["name", "count_in", "conversion_rate"]].sort_values("conversion_rate", ascending=False))
-    st.success("**Actie:** Audit laagste conversie stores – 50% labor-mismatch → +10% uplift (Ryski Ch5).")
+    st.success("**Actie:** Audit stores <20% → labor align → +10% uplift.")
 
 else:  # Directie
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
@@ -127,9 +132,6 @@ else:  # Directie
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.2f}%", "CBS -27")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", f"Q3 {q3_trend}")
 
-    c4 = st.columns(1)[0]
-    c4.metric("CBS Stats", "Vertrouwen: -27", f"Koopbereidheid: {koopbereidheid}", delta="-5% vs vorig maand", delta_color="inverse" if cbs_trust < -25 else "normal")
-
-    st.success("**Actie:** +15% marketing budget droge dagen – ROI 3.8x (Ryski Ch7). Monitor CBS voor Q4 +4% forecast.")
+    st.success("**Actie:** +15% digital budget droge dagen – ROI 3.8x.")
 
 st.caption("RetailGift AI: Vemcount + Ryski + CBS fallback. +10-15% uplift.")
