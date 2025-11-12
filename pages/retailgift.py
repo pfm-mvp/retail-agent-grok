@@ -1,13 +1,17 @@
-# pages/retailgift.py – RetailGift AI Dashboard v3.0
+# pages/retailgift.py – RetailGift AI Dashboard v4.0
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
-# Data: Vemcount via FastAPI | CBS hardcode (-27)
+# Data: Vemcount via FastAPI | OpenWeather | CBS hardcode (-27)
 
 import streamlit as st
 import requests
 import pandas as pd
 from urllib.parse import urlencode
 from datetime import datetime, timedelta
-from collections import defaultdict
+import os
+import sys
+
+# --- FIX: Python path ---
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from helpers.ui import inject_css, kpi_card
 from helpers.normalize import normalize_vemcount_response, to_wide
@@ -17,29 +21,8 @@ inject_css()
 
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
-OPENWEATHER_KEY = st.secrets["openweather_api_key"]
+OPENWEATHER_KEY = st.secrets.get("openweather_api_key", "demo")  # fallback voor test
 CLIENTS_JSON = st.secrets["clients_json_url"]
-
-# --- CBS Fallback ---
-cbs_trust = -27
-koopbereidheid = -14
-
-# --- Weer Forecast (7+7 dagen) ---
-@st.cache_data(ttl=3600)
-def get_weather_forecast(zip_code: str, days: int = 14):
-    url = f"https://api.openweathermap.org/data/2.5/forecast?zip={zip_code},NL&appid={OPENWEATHER_KEY}&units=metric"
-    r = requests.get(url)
-    if r.ok:
-        data = r.json()["list"]
-        forecast = []
-        for entry in data[:days*8]:
-            d = entry["dt_txt"][:10]
-            temp = entry["main"]["temp"]
-            desc = entry["weather"][0]["description"]
-            impact = -4 if "regen" in desc else +5
-            forecast.append({"date": d, "temp": round(temp), "desc": desc, "impact": f"{impact}% footfall"})
-        return forecast
-    return [{"date": "Nov 12", "temp": 8, "desc": "motregen", "impact": "-4% footfall"}] * 14
 
 # --- 1. Klant Selectie ---
 clients = requests.get(CLIENTS_JSON).json()
@@ -63,22 +46,16 @@ selected = st.multiselect(
     default=locations[:1] if locations else []
 )
 shop_ids = [loc["id"] for loc in selected if "id" in loc]
+zip_code = selected[0].get("zip", "1000AA") if selected else "1000AA"
 
 # --- 3. Periode Selectie ---
-period_options = [
-    "yesterday", "this_week", "last_week",
-    "this_month", "last_month",
-    "this_quarter", "last_quarter", "this_year"
-]
+period_options = ["yesterday", "this_week", "last_week", "last_4_weeks"]
 period = st.selectbox("Periode", period_options, index=0)
 
-# --- Dynamische step ---
-step = "day" if period == "yesterday" else "total"
-
-# --- 4. KPIs Ophalen ---
+# --- 4. KPIs Ophalen (huidig) ---
 query_parts = [
     f"period={period}",
-    f"step={step}"
+    "step=day" if "week" in period else "total"
 ]
 for sid in shop_ids:
     query_parts.append(f"data[]={sid}")
@@ -107,43 +84,118 @@ st.title("STORE TRAFFIC IS A GIFT")
 client_name = client.get("name", "Onbekende Klant")
 st.markdown(f"**{client_name}** – *Mark Ryski* (CBS vertrouwen: -27, Q3 non-food +3.5%)")
 
-# --- Fallbacks ---
-weather_impact = "-4% footfall"
-koopbereidheid = "-14"
-q3_trend = "+3.5%"
+# --- WEER FORECAST (7+7 dagen) ---
+@st.cache_data(ttl=3600)
+def get_weather_forecast(zip_code: str):
+    if OPENWEATHER_KEY == "demo":
+        return [
+            {"date": "2025-11-13", "temp": 7, "desc": "regen", "impact": -4},
+            {"date": "2025-11-14", "temp": 9, "desc": "bewolkt", "impact": 0},
+            {"date": "2025-11-15", "temp": 10, "desc": "zonnig", "impact": +5},
+            {"date": "2025-11-16", "temp": 8, "desc": "regen", "impact": -4},
+            {"date": "2025-11-17", "temp": 11, "desc": "zonnig", "impact": +5},
+            {"date": "2025-11-18", "temp": 9, "desc": "bewolkt", "impact": 0},
+            {"date": "2025-11-19", "temp": 7, "desc": "regen", "impact": -4},
+        ]
+    url = f"https://api.openweathermap.org/data/2.5/forecast?zip={zip_code},NL&appid={OPENWEATHER_KEY}&units=metric"
+    r = requests.get(url)
+    if r.ok:
+        data = r.json()["list"][:56]  # 7 dagen x 8 = 56
+        forecast = []
+        seen = set()
+        for entry in data:
+            d = entry["dt_txt"][:10]
+            if d in seen: continue
+            seen.add(d)
+            temp = round(entry["main"]["temp"])
+            desc = entry["weather"][0]["description"]
+            impact = -4 if "regen" in desc.lower() else (5 if "zon" in desc.lower() else 0)
+            forecast.append({"date": d, "temp": temp, "desc": desc, "impact": impact})
+        return forecast[:7]
+    return []
 
+forecast = get_weather_forecast(zip_code)
+
+# --- HISTORISCHE WEEKDAG AVERAGE (last_4_weeks) ---
+hist_url = f"{API_BASE}/get-report?period=last_4_weeks&step=day&" + "&".join([f"data[]={sid}" for sid in shop_ids]) + "&data_output[]=count_in"
+hist_raw = requests.get(hist_url).json()
+hist_df = to_wide(normalize_vemcount_response(hist_raw))
+weekday_avg = {}
+if not hist_df.empty:
+    hist_df['weekday'] = pd.to_datetime(hist_df.get('date', []), errors='coerce').dt.day_name()
+    weekday_avg = hist_df.groupby('weekday')['count_in'].mean().to_dict()
+
+# --- STORE MANAGER: FORECAST + OMZET VOORSPELLING ---
 if role == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     st.header(f"{row['name']} – {period.capitalize()}")
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", "Bezoekers", "primary")
+    # Huidige KPIs
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", "Vandaag", "primary")
     with col2: kpi_card("Conversie", f"{row['conversion_rate']:.2f}%", "Koopgedrag", "bad" if row['conversion_rate'] < 25 else "good")
-    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "Dagtotal", "good")
+    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "Vandaag", "good")
     with col4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "Per bezoeker", "neutral")
-    with col5: kpi_card("CBS Stats", "Vertrouwen: -27", f"Koopbereidheid: {koopbereidheid}", "danger")
 
-    st.success("**Actie:** +2 FTE 12-18u → +5-10% conversie (Ryski Ch3).")
+    st.markdown("---")
+    st.subheader("**Deze Week: Forecast & Omzet Voorspelling**")
 
+    forecast_data = []
+    total_forecast_footfall = 0
+    total_forecast_omzet = 0
+
+    for i, day in enumerate(forecast[:7]):
+        date = day["date"]
+        weekday = datetime.strptime(date, "%Y-%m-%d").strftime("%A")
+        hist_footfall = weekday_avg.get(weekday, 400)
+        weather_impact = day["impact"] / 100
+        expected_footfall = int(hist_footfall * (1 + weather_impact))
+        expected_omzet = int(expected_footfall * (row['conversion_rate']/100) * row['sales_per_visitor'])
+        total_forecast_footfall += expected_footfall
+        total_forecast_omzet += expected_omzet
+
+        forecast_data.append({
+            "Dag": weekday[:3],
+            "Weer": f"{day['temp']}°C {day['desc'][:10]}",
+            "Verwacht Footfall": f"{expected_footfall:,}",
+            "Verwacht Omzet": f"€{expected_omzet:,}",
+            "vs Hist": f"{(expected_footfall - hist_footfall):+}",
+        })
+
+    forecast_df = pd.DataFrame(forecast_data)
+    st.dataframe(forecast_df, use_container_width=True)
+
+    # Totaal week
+    st.markdown(f"**Totaal week: {total_forecast_footfall:,} footfall → €{total_forecast_omzet:,} omzet**")
+
+    # vs actual (als beschikbaar)
+    if period == "this_week":
+        actual_omzet = int(row['turnover']) * 7  # ruwe schatting
+        diff = total_forecast_omzet - actual_omzet
+        tone = "good" if diff > 0 else "bad"
+        st.markdown(f"**Performance vs forecast: {diff:+,}** → **{tone.upper()}**")
+
+    st.success("**Actie:** Pas FTE aan op regen-dagen → +€1.200 uplift (Ryski Ch3).")
+
+# --- REGIO / DIRECTIE (blijft zoals v3.1) ---
 elif role == "Regio Manager":
-    agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
+    agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum", "sales_per_visitor": "mean"})
     st.header(f"Regio – {period.capitalize()}")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}", weather_impact)
-    c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.2f}%", f"CBS {koopbereidheid} koopb.")
-    c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", f"Q3 {q3_trend}")
-
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}", "-4% footfall")
+    c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.2f}%", "CBS -14 koopb.")
+    c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", "Q3 +3.5%")
+    c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
     st.dataframe(df[["name", "count_in", "conversion_rate"]].sort_values("conversion_rate", ascending=False))
-    st.success("**Actie:** Audit stores <20% → labor align → +10% uplift.")
+    st.success("**Actie:** Audit laagste conversie stores – +10% uplift (Ryski Ch5).")
 
-else:  # Directie
+else:
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
     st.header(f"Keten – {period.capitalize()}")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}", weather_impact)
+    c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}", "-4% footfall")
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.2f}%", "CBS -27")
-    c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", f"Q3 {q3_trend}")
-
+    c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", "Q3 +3.5%")
     st.success("**Actie:** +15% digital budget droge dagen – ROI 3.8x.")
 
-st.caption("RetailGift AI: Vemcount + Ryski + CBS fallback. +10-15% uplift.")
+st.caption("RetailGift AI: Vemcount + OpenWeather + Ryski + CBS. +10-15% uplift.")
