@@ -1,5 +1,6 @@
 # helpers/normalize.py
 import pandas as pd
+from collections import defaultdict
 
 def to_wide(data):
     if not data or "data" not in data:
@@ -37,16 +38,15 @@ def to_wide(data):
         # Filter alleen echte dagen (geen "total")
         day_df = df[~df["date"].str.contains("total", case=False, na=False)]
         if not day_df.empty:
-            # --- CORRECTE AGGREGATIE ---
+            # CORRECTE AGGREGATIE
             total_agg = day_df.agg({
                 "count_in": "sum",
                 "turnover": "sum",
-                # Gewogen gemiddelde voor conversie & SPV
-                "conversion_rate": "mean",
+                "conversion_rate": "mean",  # gemiddelde conversie
                 "sales_per_visitor": "mean"
             }).to_dict()
 
-            # SPV = omzet / footfall → herbereken voor zekerheid
+            # SPV herberekenen: omzet / footfall (juister dan gemiddelde SPV)
             total_footfall = total_agg["count_in"]
             total_turnover = total_agg["turnover"]
             if total_footfall > 0:
@@ -59,7 +59,6 @@ def to_wide(data):
                 "name": day_df.get("name", shop_id).iloc[0] if "name" in day_df.columns else shop_id
             })
 
-            # Voeg total rij toe
             df = pd.concat([df, pd.DataFrame([total_agg])], ignore_index=True)
 
     # Converteer naar numeriek
