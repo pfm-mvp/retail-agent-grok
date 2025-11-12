@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v11.0 FINAL
+# pages/retailgift.py – RetailGift AI Dashboard v12.0 FINAL
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather (LIVE) | CBS hardcode (-27)
 
@@ -53,7 +53,7 @@ period_type = st.selectbox("Periode type", ["Fixed (Vemcount)", "Custom datum"],
 
 if period_type == "Fixed (Vemcount)":
     period_options = [
-        "y yesterday", "this_week", "last_week",
+        "yesterday", "this_week", "last_week",
         "this_month", "last_month",
         "this_quarter", "last_quarter", "this_year"
     ]
@@ -89,8 +89,16 @@ for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
     query_parts.append(f"data_output[]={output}")
 
 kpi_url = f"{API_BASE}/get-report?{'&'.join(query_parts)}"
-kpi_response = requests.get(kpi_url)
-raw_kpi = kpi_response.json()
+try:
+    kpi_response = requests.get(kpi_url, timeout=15)
+    if kpi_response.ok:
+        raw_kpi = kpi_response.json()
+    else:
+        st.error(f"API fout (KPI): {kpi_response.status_code} – {kpi_response.text[:200]}")
+        st.stop()
+except Exception as e:
+    st.error(f"API connectie fout (KPI): {e}")
+    st.stop()
 
 # --- 5. Normalize KPI Data ---
 df_kpi = to_wide(raw_kpi)
@@ -158,8 +166,10 @@ if role == "Store Manager" and len(selected) == 1:
         hist_response = requests.get(hist_url, timeout=15)
         if hist_response.ok:
             hist_df = to_wide(hist_response.json())
-    except:
-        pass
+        else:
+            st.warning(f"Forecast data niet beschikbaar: {hist_response.status_code}")
+    except Exception as e:
+        st.warning(f"Forecast connectie fout: {e}")
 
 # --- STORE MANAGER ---
 if role == "Store Manager" and len(selected) == 1:
