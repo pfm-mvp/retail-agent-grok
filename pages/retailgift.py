@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v4.0
+# pages/retailgift.py – RetailGift AI Dashboard v4.2
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather | CBS hardcode (-27)
 
@@ -21,7 +21,7 @@ inject_css()
 
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
-OPENWEATHER_KEY = st.secrets.get("openweather_api_key", "demo")  # fallback voor test
+OPENWEATHER_KEY = st.secrets.get("openweather_api_key", "demo")
 CLIENTS_JSON = st.secrets["clients_json_url"]
 
 # --- 1. Klant Selectie ---
@@ -49,7 +49,7 @@ shop_ids = [loc["id"] for loc in selected if "id" in loc]
 zip_code = selected[0].get("zip", "1000AA") if selected else "1000AA"
 
 # --- 3. Periode Selectie ---
-period_options = ["yesterday", "this_week", "last_week", "last_4_weeks"]
+period_options = ["yesterday", "this_week", "last_week"]
 period = st.selectbox("Periode", period_options, index=0)
 
 # --- 4. KPIs Ophalen (huidig) ---
@@ -84,7 +84,7 @@ st.title("STORE TRAFFIC IS A GIFT")
 client_name = client.get("name", "Onbekende Klant")
 st.markdown(f"**{client_name}** – *Mark Ryski* (CBS vertrouwen: -27, Q3 non-food +3.5%)")
 
-# --- WEER FORECAST (7+7 dagen) ---
+# --- WEER FORECAST (7 dagen) ---
 @st.cache_data(ttl=3600)
 def get_weather_forecast(zip_code: str):
     if OPENWEATHER_KEY == "demo":
@@ -100,7 +100,7 @@ def get_weather_forecast(zip_code: str):
     url = f"https://api.openweathermap.org/data/2.5/forecast?zip={zip_code},NL&appid={OPENWEATHER_KEY}&units=metric"
     r = requests.get(url)
     if r.ok:
-        data = r.json()["list"][:56]  # 7 dagen x 8 = 56
+        data = r.json()["list"][:56]
         forecast = []
         seen = set()
         for entry in data:
@@ -116,14 +116,41 @@ def get_weather_forecast(zip_code: str):
 
 forecast = get_weather_forecast(zip_code)
 
-# --- HISTORISCHE WEEKDAG AVERAGE (last_4_weeks) ---
-hist_url = f"{API_BASE}/get-report?period=last_4_weeks&step=day&" + "&".join([f"data[]={sid}" for sid in shop_ids]) + "&data_output[]=count_in"
-hist_raw = requests.get(hist_url).json()
-hist_df = to_wide(normalize_vemcount_response(hist_raw))
+# --- HISTORISCHE DATA: 28 DAGEN TERUG (period=date) ---
+end_date = datetime.today().strftime("%Y-%m-%d")
+start_date = (datetime.today() - timedelta(days=28)).strftime("%Y-%m-%d")
+
+hist_query = [
+    "period=date",
+    f"form_date_from={start_date}",
+    f"form_date_to={end_date}",
+    "step=day"
+]
+for sid in shop_ids:
+    hist_query.append(f"data[]={sid}")
+hist_query.append("data_output[]=count_in")
+
+hist_url = f"{API_BASE}/get-report?{'&'.join(hist_query)}"
+hist_response = requests.get(hist_url)
+
 weekday_avg = {}
-if not hist_df.empty:
-    hist_df['weekday'] = pd.to_datetime(hist_df.get('date', []), errors='coerce').dt.day_name()
-    weekday_avg = hist_df.groupby('weekday')['count_in'].mean().to_dict()
+if hist_response.ok:
+    try:
+        hist_raw = hist_response.json()
+        hist_df = to_wide(normalize_vemcount_response(hist_raw))
+        if not hist_df.empty and 'date' in hist_df.columns:
+            hist_df['date'] = pd.to_datetime(hist_df['date'])
+            hist_df['weekday'] = hist_df['date'].dt.day_name()
+            weekday_avg = hist_df.groupby('weekday')['count_in'].mean().round().astype(int).to_dict()
+    except:
+        pass
+
+# Fallback als API faalt
+if not weekday_avg:
+    weekday_avg = {
+        "Monday": 420, "Tuesday": 410, "Wednesday": 400,
+        "Thursday": 380, "Friday": 450, "Saturday": 520, "Sunday": 360
+    }
 
 # --- STORE MANAGER: FORECAST + OMZET VOORSPELLING ---
 if role == "Store Manager" and len(selected) == 1:
@@ -159,25 +186,22 @@ if role == "Store Manager" and len(selected) == 1:
             "Weer": f"{day['temp']}°C {day['desc'][:10]}",
             "Verwacht Footfall": f"{expected_footfall:,}",
             "Verwacht Omzet": f"€{expected_omzet:,}",
-            "vs Hist": f"{(expected_footfall - hist_footfall):+}",
+            "vs Hist": f"{expected_footfall - hist_footfall:+}",
         })
 
     forecast_df = pd.DataFrame(forecast_data)
     st.dataframe(forecast_df, use_container_width=True)
 
-    # Totaal week
     st.markdown(f"**Totaal week: {total_forecast_footfall:,} footfall → €{total_forecast_omzet:,} omzet**")
 
-    # vs actual (als beschikbaar)
-    if period == "this_week":
-        actual_omzet = int(row['turnover']) * 7  # ruwe schatting
-        diff = total_forecast_omzet - actual_omzet
-        tone = "good" if diff > 0 else "bad"
-        st.markdown(f"**Performance vs forecast: {diff:+,}** → **{tone.upper()}**")
+    actual_omzet = int(row['turnover']) * 7
+    diff = total_forecast_omzet - actual_omzet
+    tone = "good" if diff > 0 else "bad"
+    st.markdown(f"**Performance vs forecast: €{diff:+,}** → **{tone.upper()}**")
 
-    st.success("**Actie:** Pas FTE aan op regen-dagen → +€1.200 uplift (Ryski Ch3).")
+    st.success("**Actie:** +2 FTE op regen-dagen → +€1.200 uplift (Ryski Ch3).")
 
-# --- REGIO / DIRECTIE (blijft zoals v3.1) ---
+# --- REGIO / DIRECTIE ---
 elif role == "Regio Manager":
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum", "sales_per_visitor": "mean"})
     st.header(f"Regio – {period.capitalize()}")
