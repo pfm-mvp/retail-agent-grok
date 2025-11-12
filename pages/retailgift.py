@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v4.2
+# pages/retailgift.py – RetailGift AI Dashboard v4.2 FINAL
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather | CBS hardcode (-27)
 
@@ -7,6 +7,7 @@ import requests
 import pandas as pd
 from urllib.parse import urlencode
 from datetime import datetime, timedelta
+import altair as alt
 import os
 import sys
 
@@ -29,7 +30,7 @@ clients = requests.get(CLIENTS_JSON).json()
 client = st.selectbox("Retailer", clients, format_func=lambda x: f"{x.get('name', 'Onbekend')} ({x.get('brand', 'Onbekend')})")
 client_id = client.get("company_id")
 
-if not client_id:
+if not Bloomfield:
     st.error("Geen klant geselecteerd.")
     st.stop()
 
@@ -48,15 +49,18 @@ selected = st.multiselect(
 shop_ids = [loc["id"] for loc in selected if "id" in loc]
 zip_code = selected[0].get("zip", "1000AA") if selected else "1000AA"
 
-# --- 3. Periode Selectie ---
-period_options = ["yesterday", "this_week", "last_week"]
+# --- 3. Periode Selectie (ALLE opties) ---
+period_options = [
+    "yesterday", "this_week", "last_week",
+    "this_month", "last_month",
+    "this_quarter", "last_quarter", "this_year"
+]
 period = st.selectbox("Periode", period_options, index=0)
 
 # --- 4. KPIs Ophalen (huidig) ---
-query_parts = [
-    f"period={period}",
-    "step=day" if "week" in period else "total"
-]
+query_parts = [f"period={period}"]
+if "week" in period or "month" in period or "quarter" in period or "year" in period:
+    query_parts.append("step=day")  # Force day voor grafiek/forecast
 for sid in shop_ids:
     query_parts.append(f"data[]={sid}")
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
@@ -116,7 +120,7 @@ def get_weather_forecast(zip_code: str):
 
 forecast = get_weather_forecast(zip_code)
 
-# --- HISTORISCHE DATA: 28 DAGEN TERUG (period=date) ---
+# --- HISTORISCHE WEEKDAG AVERAGE (28 dagen via period=date) ---
 end_date = datetime.today().strftime("%Y-%m-%d")
 start_date = (datetime.today() - timedelta(days=28)).strftime("%Y-%m-%d")
 
@@ -124,11 +128,11 @@ hist_query = [
     "period=date",
     f"form_date_from={start_date}",
     f"form_date_to={end_date}",
-    "step=day"
+    "step=day",
+    "data_output[]=count_in"
 ]
 for sid in shop_ids:
     hist_query.append(f"data[]={sid}")
-hist_query.append("data_output[]=count_in")
 
 hist_url = f"{API_BASE}/get-report?{'&'.join(hist_query)}"
 hist_response = requests.get(hist_url)
@@ -145,39 +149,36 @@ if hist_response.ok:
     except:
         pass
 
-# Fallback als API faalt
+# Fallback
 if not weekday_avg:
     weekday_avg = {
         "Monday": 420, "Tuesday": 410, "Wednesday": 400,
         "Thursday": 380, "Friday": 450, "Saturday": 520, "Sunday": 360
     }
 
-# --- STORE MANAGER: FORECAST + OMZET VOORSPELLING ---
+# --- STORE MANAGER ---
 if role == "Store Manager" and len(selected) == 1:
-    row = df.iloc[0]
-    st.header(f"{row['name']} – {period.capitalize()}")
+    row = df.iloc[0] if len(df) > 0 else pd.Series()
+    st.header(f"{row.get('name', 'Onbekend')} – {period.capitalize()}")
 
-    # Huidige KPIs
     col1, col2, col3, col4 = st.columns(4)
-    with col1: kpi_card("Footfall", f"{int(row['count_in']):,}", "Vandaag", "primary")
-    with col2: kpi_card("Conversie", f"{row['conversion_rate']:.2f}%", "Koopgedrag", "bad" if row['conversion_rate'] < 25 else "good")
-    with col3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "Vandaag", "good")
-    with col4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "Per bezoeker", "neutral")
+    with col1: kpi_card("Footfall", f"{int(row.get('count_in', 0)):,}", "Vandaag", "primary")
+    with col2: kpi_card("Conversie", f"{row.get('conversion_rate', 0):.2f}%", "Koopgedrag", "bad" if row.get('conversion_rate', 0) < 25 else "good")
+    with col3: kpi_card("Omzet", f"€{int(row.get('turnover', 0)):,}", "Vandaag", "good")
+    with col4: kpi_card("SPV", f"€{row.get('sales_per_visitor', 0):.2f}", "Per bezoeker", "neutral")
 
     st.markdown("---")
     st.subheader("**Deze Week: Forecast & Omzet Voorspelling**")
 
     forecast_data = []
-    total_forecast_footfall = 0
-    total_forecast_omzet = 0
+    total_forecast_footfall = total_forecast_omzet = 0
 
-    for i, day in enumerate(forecast[:7]):
-        date = day["date"]
-        weekday = datetime.strptime(date, "%Y-%m-%d").strftime("%A")
+    for day in forecast:
+        weekday = datetime.strptime(day["date"], "%Y-%m-%d").strftime("%A")
         hist_footfall = weekday_avg.get(weekday, 400)
         weather_impact = day["impact"] / 100
         expected_footfall = int(hist_footfall * (1 + weather_impact))
-        expected_omzet = int(expected_footfall * (row['conversion_rate']/100) * row['sales_per_visitor'])
+        expected_omzet = int(expected_footfall * (row.get('conversion_rate', 0)/100) * row.get('sales_per_visitor', 0))
         total_forecast_footfall += expected_footfall
         total_forecast_omzet += expected_omzet
 
@@ -194,14 +195,14 @@ if role == "Store Manager" and len(selected) == 1:
 
     st.markdown(f"**Totaal week: {total_forecast_footfall:,} footfall → €{total_forecast_omzet:,} omzet**")
 
-    actual_omzet = int(row['turnover']) * 7
+    actual_omzet = int(row.get('turnover', 0)) * 7
     diff = total_forecast_omzet - actual_omzet
     tone = "good" if diff > 0 else "bad"
     st.markdown(f"**Performance vs forecast: €{diff:+,}** → **{tone.upper()}**")
 
     st.success("**Actie:** +2 FTE op regen-dagen → +€1.200 uplift (Ryski Ch3).")
 
-# --- REGIO / DIRECTIE ---
+# --- REGIO MANAGER ---
 elif role == "Regio Manager":
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum", "sales_per_visitor": "mean"})
     st.header(f"Regio – {period.capitalize()}")
@@ -210,9 +211,12 @@ elif role == "Regio Manager":
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.2f}%", "CBS -14 koopb.")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}", "Q3 +3.5%")
     c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
-    st.dataframe(df[["name", "count_in", "conversion_rate"]].sort_values("conversion_rate", ascending=False))
+
+    df['status'] = df['conversion_rate'].apply(lambda x: 'bad' if x < 20 else 'good')
+    st.dataframe(df[["name", "count_in", "conversion_rate"]].sort_values("conversion_rate"), use_container_width=True)
     st.success("**Actie:** Audit laagste conversie stores – +10% uplift (Ryski Ch5).")
 
+# --- DIRECTIE ---
 else:
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
     st.header(f"Keten – {period.capitalize()}")
