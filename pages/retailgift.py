@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v2.5
+# pages/retailgift.py – RetailGift AI Dashboard v2.6
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | CBS hardcode (-27)
 
@@ -71,7 +71,7 @@ st.code(full_url, language="text")
 st.subheader("DEBUG: Raw Response")
 st.json(raw_json, expanded=False)
 
-# --- 5. Normalize Data ZONDER step parameter ---
+# --- 5. Normalize Data ZONDER *100 ---
 df = to_wide(normalize_vemcount_response(raw_json))
 
 if df.empty:
