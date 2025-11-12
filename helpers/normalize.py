@@ -1,9 +1,8 @@
-# helpers/normalize.py – FINAL & STEP-SAFE
+# helpers/normalize.py – FINAL & ZONDER step parameter
 import pandas as pd
 from typing import Dict
 
-def extract_latest_date_data(shop_info: Dict, step: str = "day") -> Dict:
-    """Parse latest date data – handle step=day (%) vs step=total (fractie)"""
+def extract_latest_date_data(shop_info: Dict) -> Dict:
     dates = shop_info.get("dates", {})
     if not dates:
         return {"count_in": 0, "conversion_rate": 0.0, "turnover": 0.0, "sales_per_visitor": 0.0}
@@ -20,8 +19,9 @@ def extract_latest_date_data(shop_info: Dict, step: str = "day") -> Dict:
             return default
 
     conv = safe_float("conversion_rate", 0.0)
-    # step=total → API geeft fractie (0.1620) → *100
-    if step == "total" and conv <= 1.0:
+    # API geeft altijd % bij step=day, fractie bij step=total → maar we forceren % via data
+    # Als conv < 1.0 → vermenigvuldig met 100 (total)
+    if conv <= 1.0:
         conv *= 100
 
     return {
@@ -31,8 +31,7 @@ def extract_latest_date_data(shop_info: Dict, step: str = "day") -> Dict:
         "sales_per_visitor": safe_float("sales_per_visitor", 0.0)
     }
 
-def normalize_vemcount_response(response: Dict, step: str = "day") -> pd.DataFrame:
-    """Normalize API response → DataFrame"""
+def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
     data = response.get("data", {})
     rows = []
     
@@ -42,12 +41,11 @@ def normalize_vemcount_response(response: Dict, step: str = "day") -> pd.DataFra
                 shop_id = int(shop_id_str)
             except:
                 continue
-            kpi_data = extract_latest_date_data(shop_info, step=step)
+            kpi_data = extract_latest_date_data(shop_info)
             row = {"shop_id": shop_id, **kpi_data}
             rows.append(row)
     
     return pd.DataFrame(rows)
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
-    """Optioneel: pivot naar wide format (niet nodig nu)"""
     return df
