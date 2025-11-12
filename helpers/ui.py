@@ -24,7 +24,6 @@ def kpi_card(label: str, value_html: str, subtitle: str, tone: str = "neutral"):
     </div>
     """, unsafe_allow_html=True)
 
-# --- VOEG DIT TOE: inject_css ---
 def inject_css():
     st.markdown("""
     <style>
