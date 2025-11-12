@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v12.0 FINAL
+# pages/retailgift.py – RetailGift AI Dashboard v13.1 FINAL
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather (LIVE) | CBS hardcode (-27)
 
@@ -103,8 +103,9 @@ except Exception as e:
 # --- 5. Normalize KPI Data ---
 df_kpi = to_wide(raw_kpi)
 
-if df_kpi.empty:
-    st.error(f"Geen data voor {period}.")
+# --- ROBUUSTE CHECK: DataFrame + niet leeg ---
+if not isinstance(df_kpi, pd.DataFrame) or df_kpi.empty:
+    st.error(f"Geen geldige data voor {period}.")
     st.stop()
 
 location_map = {loc["id"]: loc.get("name", "Onbekend") for loc in locations}
