@@ -1,4 +1,4 @@
-# pages/retailgift.py – RetailGift AI Dashboard v2.4
+# pages/retailgift.py – RetailGift AI Dashboard v2.5
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | CBS hardcode (-27)
 
@@ -48,7 +48,7 @@ period_options = [
 ]
 period = st.selectbox("Periode", period_options, index=0)
 
-# --- Dynamische step ---
+# --- Dynamische step (alleen voor API) ---
 step = "day" if period == "yesterday" else "total"
 
 # --- 4. KPIs Ophalen ---
@@ -71,8 +71,8 @@ st.code(full_url, language="text")
 st.subheader("DEBUG: Raw Response")
 st.json(raw_json, expanded=False)
 
-# --- 5. Normalize Data MET STEP DOORGEGEVEN ---
-df = to_wide(normalize_vemcount_response(raw_json, step=step))
+# --- 5. Normalize Data ZONDER step parameter ---
+df = to_wide(normalize_vemcount_response(raw_json))
 
 if df.empty:
     st.error(f"Geen data voor {period}.")
