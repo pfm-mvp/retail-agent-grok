@@ -1,6 +1,7 @@
-# pages/retailgift.py – RetailGift AI Dashboard v13.1 FINAL
+# pages/retailgift.py – RetailGift AI Dashboard v14.0 FINAL
 # McKinsey retail inzichten: Footfall → conversie uplift via Ryski + CBS fallback
 # Data: Vemcount via FastAPI | OpenWeather (LIVE) | CBS hardcode (-27)
+# DEBUG: Sidebar toont URL, status, JSON, to_wide() flow
 
 import streamlit as st
 import requests
@@ -89,14 +90,26 @@ for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
     query_parts.append(f"data_output[]={output}")
 
 kpi_url = f"{API_BASE}/get-report?{'&'.join(query_parts)}"
+
+# --- DEBUG: Sidebar ---
+st.sidebar.markdown("## DEBUG INFO")
+st.sidebar.markdown("**KPI CALL**")
+st.sidebar.code(kpi_url, language="text")
+
 try:
     kpi_response = requests.get(kpi_url, timeout=15)
+    st.sidebar.markdown(f"**Status:** `{kpi_response.status_code}`")
+
     if kpi_response.ok:
         raw_kpi = kpi_response.json()
+        st.sidebar.markdown("**Raw JSON (first 500 chars):**")
+        st.sidebar.code(str(raw_kpi)[:500], language="json")
     else:
+        st.sidebar.error(f"API fout: {kpi_response.status_code}")
         st.error(f"API fout (KPI): {kpi_response.status_code} – {kpi_response.text[:200]}")
         st.stop()
 except Exception as e:
+    st.sidebar.error(f"Connectie fout: {e}")
     st.error(f"API connectie fout (KPI): {e}")
     st.stop()
 
@@ -106,6 +119,7 @@ df_kpi = to_wide(raw_kpi)
 # --- ROBUUSTE CHECK: DataFrame + niet leeg ---
 if not isinstance(df_kpi, pd.DataFrame) or df_kpi.empty:
     st.error(f"Geen geldige data voor {period}.")
+    st.sidebar.error("to_wide() → lege DataFrame")
     st.stop()
 
 location_map = {loc["id"]: loc.get("name", "Onbekend") for loc in locations}
@@ -174,7 +188,6 @@ if role == "Store Manager" and len(selected) == 1:
 
 # --- STORE MANAGER ---
 if role == "Store Manager" and len(selected) == 1:
-    # Gebruik df_kpi, maar neem "total" rij als beschikbaar
     total_row = df_kpi[df_kpi["date"] == "total"]
     row = total_row.iloc[0] if not total_row.empty else df_kpi.iloc[0]
 
@@ -189,7 +202,6 @@ if role == "Store Manager" and len(selected) == 1:
     st.markdown("---")
     st.subheader("**Deze Week: Forecast & Omzet Voorspelling**")
 
-    # --- FORECAST: GEBRUIK hist_df ---
     weekday_avg = defaultdict(dict)
     if not hist_df.empty and 'date' in hist_df.columns:
         try:
@@ -200,7 +212,6 @@ if role == "Store Manager" and len(selected) == 1:
         except:
             pass
 
-    # Fallback
     fallback = {
         "count_in": {"Monday": 420, "Tuesday": 410, "Wednesday": 400, "Thursday": 380, "Friday": 450, "Saturday": 520, "Sunday": 360},
         "conversion_rate": {"Monday": 16.0, "Tuesday": 16.5, "Wednesday": 17.0, "Thursday": 15.5, "Friday": 18.0, "Saturday": 19.0, "Sunday": 15.0},
