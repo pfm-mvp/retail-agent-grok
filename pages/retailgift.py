@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & THIS_WEEK AGGREGATIE + GEEN CBS CRASH
+# pages/retailgift.py – FINAL & CBS + THIS_WEEK AGGREGATIE
 import streamlit as st
 import requests
 import pandas as pd
@@ -14,6 +14,25 @@ inject_css()
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
+CBS_DATASET = st.secrets["cbs_dataset"]  # 83693NED
+
+# --- CBS Vertrouwen Live (GEVIXT) ---
+@st.cache_data(ttl=86400)
+def get_cbs_vertrouwen():
+    try:
+        # CORRECTE CBS ODATA URL MET $format=json
+        url = f"https://opendata.cbs.nl/ODataFeed/odata/{CBS_DATASET}/Observations?$format=json&$filter=substringof('Consumentenvertrouwen', MeasureDescription)"
+        r = requests.get(url, timeout=10)
+        if r.ok:
+            data = r.json().get("value", [])
+            if data:
+                latest = max(data, key=lambda x: x.get("Perioden", ""))
+                return latest.get("Value", -27)
+    except Exception as e:
+        st.warning(f"CBS data tijdelijk niet beschikbaar: {e}")
+    return -27  # fallback
+
+cbs_trust = get_cbs_vertrouwen()
 
 # --- 1. KLANT ---
 clients = requests.get(CLIENTS_JSON).json()
@@ -27,7 +46,7 @@ shop_ids = [loc["id"] for loc in selected]
 
 # --- 3. PERIODE + DATUM SELECTOR ---
 period_options = ["yesterday", "today", "this_week", "last_week", "this_month", "last_month", "date"]
-period = st.selectbox("Periode", period_options, index=2)  # default this_week
+period = st.selectbox("Periode", period_options, index=2)
 
 form_date_from = form_date_to = None
 if period == "date":
@@ -87,7 +106,7 @@ role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"])
 # --- 8. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
-st.markdown(f"**{client['name']}** – *Mark Ryski*")
+st.markdown(f"**{client['name']}** – *Mark Ryski* (CBS vertrouwen: {cbs_trust})")
 
 if role == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
@@ -116,4 +135,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: `period_step=day` + sum/mean aggregatie = perfecte weekdata. CBS/weer later.")
+st.caption("RetailGift AI: CBS + `period_step=day` + aggregatie = perfecte weekdata.")
