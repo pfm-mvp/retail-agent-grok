@@ -44,17 +44,21 @@ locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["da
 selected = st.multiselect("Vestiging(en)", locations, format_func=lambda x: f"{x['name']} – {x.get('zip')}", default=locations[:1])
 shop_ids = [loc["id"] for loc in selected]
 
-# --- 7. PERIODE + DATUM SELECTOR ---
-period_options = ["yesterday", "today", "this_week", "last_week", "this_month", "last_month", "date"]
+# --- 7. PERIODE + DATUM SELECTOR (ALTIJD ZICHTBAAR) ---
+period_options = ["yesterday", "today", "this_week", "last_week", "this_month", "last_month", "date", "custom"]
 period = st.selectbox("Periode", period_options, index=2)
 
 form_date_from = form_date_to = None
-if period == "date":
-    col1, col2 = st.columns(2)
-    with col1:
-        start = st.date_input("Van", date.today() - timedelta(days=7))
-    with col2:
-        end = st.date_input("Tot", date.today())
+
+# Datumkiezer altijd tonen
+col1, col2 = st.columns(2)
+with col1:
+    start = st.date_input("Van", date.today() - timedelta(days=7), key="start_date")
+with col2:
+    end = st.date_input("Tot", date.today(), key="end_date")
+
+# Gebruik custom dates bij "date" of "custom"
+if period in ["date", "custom"]:
     form_date_from = start.strftime("%Y-%m-%d")
     form_date_to = end.strftime("%Y-%m-%d")
 
@@ -62,7 +66,7 @@ if period == "date":
 params = [
     ("period", period),
     ("period_step", "day"),
-    ("source", "shops")  # <--- ESSENTIEEL
+    ("source", "shops")
 ]
 if form_date_from:
     params.extend([("form_date_from", form_date_from), ("form_date_to", form_date_to)])
@@ -70,11 +74,6 @@ for sid in shop_ids:
     params.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
     params.append(("data_output[]", output))
-
-query_string = urlencode(params, doseq=True, safe='[]')
-url = f"{API_BASE}/get-report?{query_string}"
-data_response = requests.get(url)
-raw_json = data_response.json()
 
 # --- 9. DEBUG: API + JSON ---
 st.subheader("DEBUG: API URL")
