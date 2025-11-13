@@ -86,8 +86,9 @@ st.json(raw_json, expanded=False)  # <--- NU WERKT
 # --- 5. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
-# --- DEBUG: AANTAL RIJEN ---
-st.write(f"DEBUG: Aantal rijen na normalize: {len(df_raw)}")
+# --- DEBUG ---
+st.write(f"DEBUG: df_raw.shape = {df_raw.shape}")
+st.write(f"DEBUG: df_raw.empty = {df_raw.empty}")
 
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
