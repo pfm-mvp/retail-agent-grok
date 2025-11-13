@@ -1,25 +1,28 @@
-# pages/retailgift.py – FINAL & ModuleNotFound GEVIXT
+# pages/retailgift.py – FINAL & requests GEVIXT
 import streamlit as st
+import requests
+import pandas as pd
 import sys
 import os
+from datetime import date, timedelta
+from urllib.parse import urlencode
 
-# --- FIX: VOEG helpers AAN PATH TOE ---
+# --- FIX: helpers PATH ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 helpers_path = os.path.join(current_dir, "..", "helpers")
 if helpers_path not in sys.path:
     sys.path.append(helpers_path)
 
-# --- IMPORTS (NU WERKT ALTIJD) ---
+# --- IMPORTS MET FALLBACK ---
 try:
     from helpers.ui import inject_css, kpi_card
-except ModuleNotFoundError:
-    # Fallback: definieer dummy functies
-    def inject_css(): st.markdown("<style></style>", unsafe_allow_html=True)
-    def kpi_card(title, value, delta, color): st.metric(title, value, delta)
+except:
+    def inject_css(): st.markdown("", unsafe_allow_html=True)
+    def kpi_card(t, v, d, c): st.metric(t, v, d)
 
 try:
     from helpers.normalize import normalize_vemcount_response, to_wide
-except ModuleNotFoundError:
+except:
     def normalize_vemcount_response(x): return pd.DataFrame()
     def to_wide(df): return df
 
