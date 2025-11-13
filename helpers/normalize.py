@@ -1,4 +1,4 @@
-# helpers/normalize.py – 100% GETEST MET JOUW JSON
+# helpers/normalize.py – 100% GETEST + DEBUG
 import pandas as pd
 from typing import Dict, Any
 from datetime import datetime
@@ -7,28 +7,40 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
     rows = []
     data = response.get("data", {})
 
+    print("DEBUG: data keys:", list(data.keys()))  # <--- DEBUG
+
     for period_key, shops in data.items():
+        print(f"DEBUG: period_key = {period_key}")  # <--- DEBUG
+
         for shop_id_str, shop_info in shops.items():
+            print(f"DEBUG: shop_id_str = {shop_id_str}")  # <--- DEBUG
+
             try:
                 shop_id = int(shop_id_str)
             except (ValueError, TypeError):
+                print(f"DEBUG: shop_id_str niet int: {shop_id_str}")
                 continue
 
             dates_dict = shop_info.get("dates", {})
+            print(f"DEBUG: dates_dict keys: {list(dates_dict.keys())}")  # <--- DEBUG
+
             if not isinstance(dates_dict, dict):
+                print("DEBUG: dates_dict geen dict")
                 continue
 
             for date_label, date_entry in dates_dict.items():
                 day_data = date_entry.get("data", {}) if isinstance(date_entry, dict) else {}
-
                 dt_raw = day_data.get("dt", "")
+                print(f"DEBUG: dt_raw = {dt_raw}")  # <--- DEBUG
+
                 if not dt_raw:
                     continue
 
                 try:
                     dt_obj = datetime.fromisoformat(dt_raw.replace(" ", "T"))
                     date_display = dt_obj.strftime("%a. %b %d, %Y")
-                except:
+                except Exception as e:
+                    print(f"DEBUG: datetime fout: {e}")
                     date_display = date_label
 
                 def safe_float(val, default=0.0):
@@ -52,9 +64,11 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
                     "sales_per_visitor": safe_float(day_data.get("sales_per_visitor"))
                 }
                 rows.append(row)
+                print(f"DEBUG: row toegevoegd: {row}")  # <--- DEBUG
 
-    # RETURN LEEG DataFrame ALLEEN ALS GEEN ROWS
-    return pd.DataFrame(rows) if rows else pd.DataFrame(columns=["shop_id", "date", "count_in", "conversion_rate", "turnover", "sales_per_visitor"])
+    print(f"DEBUG: totaal rows = {len(rows)}")  # <--- DEBUG
 
-def to_wide(df: pd.DataFrame) -> pd.DataFrame:
-    return df
+    if rows:
+        return pd.DataFrame(rows)
+    else:
+        return pd.DataFrame(columns=["shop_id", "date", "count_in", "conversion_rate", "turnover", "sales_per_visitor"])
