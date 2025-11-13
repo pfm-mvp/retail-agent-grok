@@ -91,7 +91,7 @@ if df_raw.empty:
 
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- DEBUG: ALLE DAGEN (MET date KOLOM) ---
+# --- DEBUG: ALLE DAGEN ---
 st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
 st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
 
