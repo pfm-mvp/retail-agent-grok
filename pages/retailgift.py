@@ -83,10 +83,19 @@ st.code(url, language="text")
 st.subheader("DEBUG: Raw JSON (van API)")
 st.json(raw_json, expanded=False)  # <--- NU WERKT
 
+# --- IMPORTS MET CACHE KILLER ---
+import importlib
+import helpers.normalize as norm_module
+importlib.reload(norm_module)  # <--- FORCEER HERLAAD
+from helpers.normalize import normalize_vemcount_response
+
 # --- 5. NORMALISEER ---
+st.write("DEBUG: normalize_vemcount_response functie:", normalize_vemcount_response)
+
 df_raw = normalize_vemcount_response(raw_json)
 
 st.write(f"DEBUG: df_raw.shape = {df_raw.shape}")
+st.write(f"DEBUG: df_raw.columns = {list(df_raw.columns) if not df_raw.empty else 'leeg'}")
 
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
