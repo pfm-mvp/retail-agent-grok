@@ -1,37 +1,39 @@
-# helpers/normalize.py – 100% GETEST + DEBUG
+# helpers/normalize.py – FINAL & 100% WERKENDE
 import pandas as pd
 from typing import Dict, Any
 from datetime import datetime
+import streamlit as st  # <--- VOOR DEBUG IN APP
 
 def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
     rows = []
     data = response.get("data", {})
 
-    print("DEBUG: data keys:", list(data.keys()))  # <--- DEBUG
+    # DEBUG IN APP (optioneel, verwijder later)
+    st.write("DEBUG: data keys:", list(data.keys()))
 
     for period_key, shops in data.items():
-        print(f"DEBUG: period_key = {period_key}")  # <--- DEBUG
+        st.write(f"DEBUG: period_key = {period_key}")
 
         for shop_id_str, shop_info in shops.items():
-            print(f"DEBUG: shop_id_str = {shop_id_str}")  # <--- DEBUG
+            st.write(f"DEBUG: shop_id_str = {shop_id_str}")
 
             try:
                 shop_id = int(shop_id_str)
             except (ValueError, TypeError):
-                print(f"DEBUG: shop_id_str niet int: {shop_id_str}")
+                st.write(f"DEBUG: shop_id_str niet int: {shop_id_str}")
                 continue
 
             dates_dict = shop_info.get("dates", {})
-            print(f"DEBUG: dates_dict keys: {list(dates_dict.keys())}")  # <--- DEBUG
+            st.write(f"DEBUG: dates_dict keys: {list(dates_dict.keys())}")
 
             if not isinstance(dates_dict, dict):
-                print("DEBUG: dates_dict geen dict")
+                st.write("DEBUG: dates_dict geen dict")
                 continue
 
             for date_label, date_entry in dates_dict.items():
                 day_data = date_entry.get("data", {}) if isinstance(date_entry, dict) else {}
                 dt_raw = day_data.get("dt", "")
-                print(f"DEBUG: dt_raw = {dt_raw}")  # <--- DEBUG
+                st.write(f"DEBUG: dt_raw = {dt_raw}")
 
                 if not dt_raw:
                     continue
@@ -40,7 +42,7 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
                     dt_obj = datetime.fromisoformat(dt_raw.replace(" ", "T"))
                     date_display = dt_obj.strftime("%a. %b %d, %Y")
                 except Exception as e:
-                    print(f"DEBUG: datetime fout: {e}")
+                    st.write(f"DEBUG: datetime fout: {e}")
                     date_display = date_label
 
                 def safe_float(val, default=0.0):
@@ -64,9 +66,9 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
                     "sales_per_visitor": safe_float(day_data.get("sales_per_visitor"))
                 }
                 rows.append(row)
-                print(f"DEBUG: row toegevoegd: {row}")  # <--- DEBUG
+                st.write(f"DEBUG: row toegevoegd: {row}")
 
-    print(f"DEBUG: totaal rows = {len(rows)}")  # <--- DEBUG
+    st.write(f"DEBUG: totaal rows = {len(rows)}")
 
     if rows:
         return pd.DataFrame(rows)
