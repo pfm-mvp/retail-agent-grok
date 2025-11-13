@@ -1,4 +1,4 @@
-# helpers/normalize.py – FINAL & ALLE DAGEN + DATE KOLOM
+# helpers/normalize.py – FINAL & GEBRUIK dt ALS date
 import pandas as pd
 from typing import Dict, Any
 
@@ -8,46 +8,53 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
     
     # Loop over period (bijv. "this_week")
     for period_key, shops in data.items():
-        # Loop over shops (bijv. "29641")
         for shop_id_str, shop_info in shops.items():
             try:
                 shop_id = int(shop_id_str)
             except (ValueError, TypeError):
                 continue
 
-            # GET DATES DICT
-            dates_dict = shop_info.get("dates", {})
-            if not isinstance(dates_dict, dict):
+            # DIRECTE DAGDATA (geen "dates" dict)
+            day_data = shop_info.get("data", {})
+            if not isinstance(day_data, dict):
                 continue
 
-            # LOOP OVER ELKE DAG
-            for date_label, date_entry in dates_dict.items():
-                day_data = date_entry.get("data", {}) if isinstance(date_entry, dict) else {}
+            dt_raw = day_data.get("dt", "")
+            if not dt_raw:
+                continue
 
-                # SAFE PARSING
-                def safe_float(val, default=0.0):
-                    try:
-                        return float(val) if val is not None else default
-                    except (ValueError, TypeError):
-                        return default
+            # Format: "2025-11-13 00:00:00" → "Wed. Nov 12, 2025" (of hou als ISO)
+            try:
+                from datetime import datetime
+                dt_obj = datetime.fromisoformat(dt_raw.replace(" ", "T"))
+                date_label = dt_obj.strftime("%a. %b %d, %Y")  # Mon. Nov 10, 2025
+            except:
+                date_label = dt_raw.split(" ")[0]  # fallback: 2025-11-13
 
-                def safe_int(val, default=0):
-                    try:
-                        return int(float(val)) if val is not None else default
-                    except (ValueError, TypeError):
-                        return default
+            # SAFE PARSING
+            def safe_float(val, default=0.0):
+                try:
+                    return float(val) if val is not None else default
+                except:
+                    return default
 
-                row = {
-                    "shop_id": shop_id,
-                    "date": date_label.strip(),  # <-- CLEAN DATE LABEL
-                    "count_in": safe_int(day_data.get("count_in")),
-                    "conversion_rate": safe_float(day_data.get("conversion_rate")),
-                    "turnover": safe_float(day_data.get("turnover")),
-                    "sales_per_visitor": safe_float(day_data.get("sales_per_visitor"))
-                }
-                rows.append(row)
+            def safe_int(val, default=0):
+                try:
+                    return int(float(val)) if val is not None else default
+                except:
+                    return default
+
+            row = {
+                "shop_id": shop_id,
+                "date": date_label,  # <-- VAN dt
+                "count_in": safe_int(day_data.get("count_in")),
+                "conversion_rate": safe_float(day_data.get("conversion_rate")),
+                "turnover": safe_float(day_data.get("turnover")),
+                "sales_per_visitor": safe_float(day_data.get("sales_per_visitor"))
+            }
+            rows.append(row)
     
     return pd.DataFrame(rows)
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
-    return df  # Geen pivot nodig
+    return df
