@@ -6,46 +6,45 @@ import sys
 import os
 from datetime import date, timedelta
 from urllib.parse import urlencode
+import importlib  # <--- VOOR RELOAD
 
-# --- FIX: helpers PATH ---
+# --- 1. FIX: helpers PATH + RELOAD normalize ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-root_path = os.path.join(current_dir, "..")  # project root
-if root_path not in sys.path:
-    sys.path.append(root_path)
+helpers_path = os.path.join(current_dir, "..", "helpers")
+if helpers_path not in sys.path:
+    sys.path.append(helpers_path)
 
-# --- IMPORTS MET FALLBACK ---
-try:
-    from helpers.normalize import normalize_vemcount_response, to_wide
-except Exception as e:
-    st.error(f"Normalize fallback! Import error: {e}")
-    def normalize_vemcount_response(x): return pd.DataFrame()
-    def to_wide(df): return df
+# RELOAD normalize.py (forceert nieuwe versie)
+import normalize
+importlib.reload(normalize)
+from normalize import normalize_vemcount_response
 
+# --- 2. IMPORTS MET FALLBACK ---
 try:
-    from helpers.normalize import normalize_vemcount_response, to_wide
+    from helpers.ui import inject_css, kpi_card
 except:
-    def normalize_vemcount_response(x): return pd.DataFrame()
-    def to_wide(df): return df
+    def inject_css(): st.markdown("", unsafe_allow_html=True)
+    def kpi_card(t, v, d, c): st.metric(t, v, d)
 
-# --- REST VAN CODE ---
+# --- 3. PAGE CONFIG ---
 st.set_page_config(page_title="RetailGift AI", page_icon="STORE TRAFFIC IS A GIFT", layout="wide")
 inject_css()
 
-# --- SECRETS ---
+# --- 4. SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
 
-# --- 1. KLANT ---
+# --- 5. KLANT ---
 clients = requests.get(CLIENTS_JSON).json()
 client = st.selectbox("Klant", clients, format_func=lambda x: f"{x.get('name')} ({x.get('brand')})")
 client_id = client.get("company_id")
 
-# --- 2. LOCATIES ---
+# --- 6. LOCATIES ---
 locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
 selected = st.multiselect("Vestiging(en)", locations, format_func=lambda x: f"{x['name']} – {x.get('zip')}", default=locations[:1])
 shop_ids = [loc["id"] for loc in selected]
 
-# --- 3. PERIODE + DATUM SELECTOR ---
+# --- 7. PERIODE + DATUM SELECTOR ---
 period_options = ["yesterday", "today", "this_week", "last_week", "this_month", "last_month", "date"]
 period = st.selectbox("Periode", period_options, index=2)
 
@@ -59,7 +58,7 @@ if period == "date":
     form_date_from = start.strftime("%Y-%m-%d")
     form_date_to = end.strftime("%Y-%m-%d")
 
-# --- 4. API CALL ---
+# --- 8. API CALL ---
 params = [
     ("period", period),
     ("period_step", "day"),
@@ -77,26 +76,17 @@ url = f"{API_BASE}/get-report?{query_string}"
 data_response = requests.get(url)
 raw_json = data_response.json()
 
-# --- DEBUG: API URL + RAW JSON ---
+# --- 9. DEBUG: API + JSON ---
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
 
 st.subheader("DEBUG: Raw JSON (van API)")
-st.json(raw_json, expanded=False)  # <--- NU WERKT
+st.json(raw_json, expanded=False)
 
-# --- IMPORTS MET CACHE KILLER ---
-import importlib
-import helpers.normalize as norm_module
-importlib.reload(norm_module)  # <--- FORCEER HERLAAD
-from helpers.normalize import normalize_vemcount_response
-
-# --- 5. NORMALISEER ---
-st.write("DEBUG: normalize_vemcount_response functie:", normalize_vemcount_response)
-
+# --- 10. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
 st.write(f"DEBUG: df_raw.shape = {df_raw.shape}")
-st.write(f"DEBUG: df_raw.columns = {list(df_raw.columns) if not df_raw.empty else 'leeg'}")
 
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
@@ -104,7 +94,11 @@ if df_raw.empty:
 
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- 6. AGGREGEER ---
+# --- 11. DEBUG: TABEL ---
+st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
+st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
+
+# --- 12. AGGREGEER ---
 df = df_raw.copy()
 multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date"]
 if period in multi_day_periods and len(df) > 1:
@@ -117,10 +111,10 @@ if period in multi_day_periods and len(df) > 1:
     agg["name"] = agg["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
     df = agg
 
-# --- 7. ROL ---
+# --- 13. ROL ---
 role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"])
 
-# --- 8. UI ---
+# --- 14. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
 st.markdown(f"**{client['name']}** – *Mark Ryski*")
@@ -152,4 +146,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: `source=shops` + `st.json` + multi-day = 100% LIVE.")
+st.caption("RetailGift AI: `source=shops` + `importlib.reload()` + `normalize.py` = 100% LIVE.")
