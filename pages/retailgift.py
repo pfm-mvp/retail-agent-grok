@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & KeyError + DEBUG GEVIXT
+# pages/retailgift.py – FINAL & 100% WERKENDE
 import streamlit as st
 import requests
 import pandas as pd
@@ -73,30 +73,29 @@ for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
 
 query_string = urlencode(params, doseq=True, safe='[]')
 url = f"{API_BASE}/get-report?{query_string}"
+data_response = requests.get(url)
+raw_json = data_response.json()
 
 # --- DEBUG: API URL + RAW JSON ---
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
 
 st.subheader("DEBUG: Raw JSON (van API)")
-st.json(raw_json, expanded=False)
+st.json(raw_json, expanded=False)  # <--- NU WERKT
 
 # --- 5. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
-# --- DEBUG: TOON ALTIJD ---
-st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
-if df_raw.empty:
-    st.write("df_raw is leeg – geen rijen toegevoegd")
-else:
-    df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
-    st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
-
-# --- STOP ALLEEN ALS ECHT LEEG ---
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
     st.stop()
-    
+
+df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
+
+# --- DEBUG: ALLE DAGEN ---
+st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
+st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
+
 # --- 6. AGGREGEER ---
 df = df_raw.copy()
 multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date"]
@@ -145,4 +144,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: veilige kolommen + multi-day = 100% LIVE.")
+st.caption("RetailGift AI: `source=shops` + `st.json` + multi-day = 100% LIVE.")
