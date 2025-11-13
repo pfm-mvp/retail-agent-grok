@@ -69,14 +69,9 @@ if df_raw.empty:
 
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- DEBUG: VEILIGE TABEL ---
+# --- DEBUG: ALLE KOLOMMEN (VEILIG) ---
 st.subheader("DEBUG: Raw Data (ALLE DAGEN VAN FIXED PERIOD)")
-desired_cols = ["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]
-available_cols = [col for col in desired_cols if col in df_raw.columns]
-if available_cols:
-    st.dataframe(df_raw[available_cols])
-else:
-    st.dataframe(df_raw)
+st.dataframe(df_raw)  # TOON ALLES: shop_id, date, name, count_in, ...
 
 # --- 6. AGGREGEER ---
 df = df_raw.copy()
