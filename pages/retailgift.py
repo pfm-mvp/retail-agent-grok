@@ -71,10 +71,10 @@ if df_raw.empty:
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
 # --- VEILIGE DEBUG KOLOMMEN ---
-base_cols = ["date", "name"]
-kpi_cols = ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]
-available_kpi = [col for col in kpi_cols if col in df_raw.columns]
-debug_cols = base_cols + available_kpi
+debug_cols = ["date", "name"]
+for col in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
+    if col in df_raw.columns:
+        debug_cols.append(col)
 
 # --- DEBUG: RAW TABEL ---
 st.subheader("DEBUG: Raw Data (alle dagen)")
@@ -128,4 +128,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: `date` + veilige kolommen = 100% LIVE.")
+st.caption("RetailGift AI: `date` kolom + veilige debug = 100% LIVE.")
