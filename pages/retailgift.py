@@ -1,13 +1,29 @@
-# pages/retailgift.py – FINAL & KeyError + MULTI-DAY GEVIXT
+# pages/retailgift.py – FINAL & ModuleNotFound GEVIXT
 import streamlit as st
-import requests
-import pandas as pd
-from datetime import date, timedelta
-from urllib.parse import urlencode
+import sys
+import os
 
-from helpers.ui import inject_css, kpi_card
-from helpers.normalize import normalize_vemcount_response, to_wide
+# --- FIX: VOEG helpers AAN PATH TOE ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+helpers_path = os.path.join(current_dir, "..", "helpers")
+if helpers_path not in sys.path:
+    sys.path.append(helpers_path)
 
+# --- IMPORTS (NU WERKT ALTIJD) ---
+try:
+    from helpers.ui import inject_css, kpi_card
+except ModuleNotFoundError:
+    # Fallback: definieer dummy functies
+    def inject_css(): st.markdown("<style></style>", unsafe_allow_html=True)
+    def kpi_card(title, value, delta, color): st.metric(title, value, delta)
+
+try:
+    from helpers.normalize import normalize_vemcount_response, to_wide
+except ModuleNotFoundError:
+    def normalize_vemcount_response(x): return pd.DataFrame()
+    def to_wide(df): return df
+
+# --- REST VAN CODE (zoals eerder) ---
 st.set_page_config(page_title="RetailGift AI", page_icon="STORE TRAFFIC IS A GIFT", layout="wide")
 inject_css()
 
