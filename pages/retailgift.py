@@ -70,15 +70,9 @@ if df_raw.empty:
 # --- EERST NAME TOEVOEGEN ---
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- VEILIGE DEBUG KOLOMMEN ---
-debug_cols = ["date", "name"]
-for col in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
-    if col in df_raw.columns:
-        debug_cols.append(col)
-
-# --- DEBUG: RAW TABEL ---
+# --- DEBUG: ALLE KOLOMMEN ---
 st.subheader("DEBUG: Raw Data (alle dagen)")
-st.dataframe(df_raw[debug_cols])
+st.dataframe(df_raw)
 
 # --- 6. AGGREGEER VOOR WEEK ---
 df = df_raw.copy()
@@ -128,4 +122,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: `date` kolom + veilige debug = 100% LIVE.")
+st.caption("RetailGift AI: `date` kolom + alle kolommen debug = 100% LIVE.")
