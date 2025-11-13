@@ -84,17 +84,9 @@ st.subheader("DEBUG: Raw JSON (van API)")
 st.json(raw_json, expanded=False)  # <--- NU WERKT
 
 # --- 5. NORMALISEER ---
-# df_raw = normalize_vemcount_response(raw_json)  # <--- COMMENT UIT
+df_raw = normalize_vemcount_response(raw_json)
 
-# HARD CODE TEST IN MAIN
-df_raw = pd.DataFrame([
-    {"shop_id": 29641, "date": "Mon. Nov 10, 2025", "count_in": 264, "conversion_rate": 14.39, "turnover": 654.44, "sales_per_visitor": 2.48},
-    {"shop_id": 29641, "date": "Tue. Nov 11, 2025", "count_in": 426, "conversion_rate": 16.2, "turnover": 1325.32, "sales_per_visitor": 3.11},
-    {"shop_id": 29641, "date": "Wed. Nov 12, 2025", "count_in": 168, "conversion_rate": 13.1, "turnover": 409.74, "sales_per_visitor": 2.44},
-    {"shop_id": 29641, "date": "Thu. Nov 13, 2025", "count_in": 48, "conversion_rate": 0.0, "turnover": 0.0, "sales_per_visitor": 0.0},
-])
-
-st.write(f"DEBUG: HARD CODE TEST – df_raw.shape = {df_raw.shape}")
+st.write(f"DEBUG: df_raw.shape = {df_raw.shape}")
 
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
