@@ -1,6 +1,6 @@
-# helpers/normalize.py – FINAL & 1 ROW PER DAG
+# helpers/normalize.py – FINAL & 1 ROW PER DAG + DATUM
 import pandas as pd
-from typing import Dict, Any
+from typing import Dict
 
 def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
     rows = []
@@ -14,8 +14,8 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
                 continue
 
             dates = shop_info.get("dates", {})
-            for date_key, date_data in dates.items():
-                day = date_data.get("data", {})
+            for date_key, date_entry in dates.items():
+                day_data = date_entry.get("data", {})
                 
                 def safe_float(val, default=0.0):
                     try:
@@ -31,15 +31,15 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
 
                 row = {
                     "shop_id": shop_id,
-                    "date": date_key,
-                    "count_in": safe_int(day.get("count_in")),
-                    "conversion_rate": safe_float(day.get("conversion_rate")),
-                    "turnover": safe_float(day.get("turnover")),
-                    "sales_per_visitor": safe_float(day.get("sales_per_visitor"))
+                    "date": date_key,  # <-- DATUM KOLOM
+                    "count_in": safe_int(day_data.get("count_in")),
+                    "conversion_rate": safe_float(day_data.get("conversion_rate")),
+                    "turnover": safe_float(day_data.get("turnover")),
+                    "sales_per_visitor": safe_float(day_data.get("sales_per_visitor"))
                 }
                 rows.append(row)
     
     return pd.DataFrame(rows)
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
-    return df  # geen pivot nodig
+    return df
