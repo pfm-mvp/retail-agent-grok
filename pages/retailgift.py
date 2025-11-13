@@ -63,10 +63,21 @@ st.subheader("DEBUG: Raw DF (voor aggregatie)")
 df_raw = normalize_vemcount_response(raw_json)
 st.dataframe(df_raw)
 
-# --- 5. AGGREGEER ---
-df = df_raw.copy()
-df["name"] = df["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
+# --- 5. NORMALISEER (1 ROW PER DAG) ---
+df_raw = normalize_vemcount_response(raw_json)
 
+if df_raw.empty:
+    st.error(f"Geen data voor {period}. Probeer 'today'.")
+    st.stop()
+
+df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
+
+# --- DEBUG: RAW TABEL MET DATUM ---
+st.subheader("DEBUG: Raw Data (alle dagen)")
+st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
+
+# --- 6. AGGREGEER VOOR WEEK ---
+df = df_raw.copy()
 multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date"]
 if period in multi_day_periods and len(df) > 1:
     agg = {
@@ -76,7 +87,7 @@ if period in multi_day_periods and len(df) > 1:
         "sales_per_visitor": df["sales_per_visitor"].mean()
     }
     df = pd.DataFrame([agg])
-    df["name"] = "TOTAAL" if len(selected) > 1 else selected[0]["name"]
+    df["name"] = "TOTAAL" if len(selected) > 1 else df_raw["name"].iloc[0]
 
 # --- 6. ROL ---
 role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"])
