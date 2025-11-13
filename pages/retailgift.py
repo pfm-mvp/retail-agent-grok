@@ -85,26 +85,19 @@ st.json(raw_json, expanded=False)
 # --- 5. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
-if df_raw.empty:
-    st.error(f"Geen data voor {period}. API gaf lege response.")
-    st.stop()
-
-# --- name TOEVOEGEN VOOR DEBUG ---
-df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
-
-# --- DEBUG: VEILIGE TABEL ---
+# --- DEBUG: TOON ALTIJD ---
 st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
-desired_cols = ["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]
-available_cols = [col for col in desired_cols if col in df_raw.columns]
-st.dataframe(df_raw[available_cols])
+if df_raw.empty:
+    st.write("df_raw is leeg – geen rijen toegevoegd")
+else:
+    df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
+    st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
 
 # --- STOP ALLEEN ALS ECHT LEEG ---
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
     st.stop()
-
-df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
-
+    
 # --- 6. AGGREGEER ---
 df = df_raw.copy()
 multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date"]
