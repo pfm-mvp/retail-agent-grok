@@ -45,18 +45,18 @@ shop_ids = [loc["id"] for loc in selected]
 
 # --- 7. PERIODE SELECTOR ---
 fixed_periods = ["yesterday", "today", "this_week", "last_week", "this_month", "last_month"]
-period_option = st.selectbox("Periode", fixed_periods + ["custom"], index=2)
+period_option = st.selectbox("Periode", fixed_periods + ["date"], index=2)
 
-# --- 8. DATUM SELECTOR (alleen bij custom) ---
+# --- 8. DATUM SELECTOR (alleen bij "date") ---
 form_date_from = form_date_to = None
-if period_option == "custom":
+if period_option == "date":
     col1, col2 = st.columns(2)
     with col1:
         start = st.date_input("Van", date.today() - timedelta(days=7), key="start_date")
     with col2:
         end = st.date_input("Tot", date.today(), key="end_date")
 
-    # VALIDEER DATUM
+    # VALIDEER: start <= end
     if start > end:
         st.error("**Fout:** 'Van' datum moet vóór 'Tot' datum zijn.")
         st.stop()
@@ -64,14 +64,14 @@ if period_option == "custom":
     form_date_from = start.strftime("%Y-%m-%d")
     form_date_to = end.strftime("%Y-%m-%d")
 
-# --- 9. API CALL ---
+# --- 9. API CALL: OF period OF date ---
 params = [
     ("period_step", "day"),
     ("source", "shops")
 ]
 
-if period_option == "custom":
-    params.append(("period", "custom"))
+if period_option == "date":
+    params.append(("period", "date"))
     params.extend([("form_date_from", form_date_from), ("form_date_to", form_date_to)])
 else:
     params.append(("period", period_option))
@@ -85,7 +85,7 @@ query_string = urlencode(params, doseq=True, safe='[]')
 url = f"{API_BASE}/get-report?{query_string}"
 data_response = requests.get(url)
 
-# DEBUG + ERROR HANDLING
+# --- ERROR HANDLING ---
 st.write(f"DEBUG: HTTP Status = {data_response.status_code}")
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
@@ -97,13 +97,14 @@ if data_response.status_code != 200:
 
 try:
     raw_json = data_response.json()
-except requests.exceptions.JSONDecodeError as e:
-    st.error("**JSON fout:** API gaf geen geldige JSON. Mogelijk ongeldige datums.")
+except requests.exceptions.JSONDecodeError:
+    st.error("**JSON fout:** API gaf geen geldige JSON. Controleer datums.")
     st.code(data_response.text[:1000], language="html")
     st.stop()
 
 st.subheader("DEBUG: Raw JSON (van API)")
 st.json(raw_json, expanded=False)
+
 # --- 10. DEBUG ---
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
