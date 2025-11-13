@@ -7,22 +7,22 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
     rows = []
     data = response.get("data", {})
 
-    for period_key, shops in data.items():  # "this_week"
+    for period_key, shops in data.items():
         for shop_id_str, shop_info in shops.items():
             try:
                 shop_id = int(shop_id_str)
             except (ValueError, TypeError):
                 continue
 
-            # DATES IS GENEST IN shop_info
+            # GET DATES DICT
             dates_dict = shop_info.get("dates", {})
             if not isinstance(dates_dict, dict):
                 continue
 
+            # LOOP OVER ELKE DAG
             for date_label, date_entry in dates_dict.items():
                 day_data = date_entry.get("data", {}) if isinstance(date_entry, dict) else {}
 
-                # GEBRUIK `dt` UIT `data` PER DAG
                 dt_raw = day_data.get("dt", "")
                 if not dt_raw:
                     continue
@@ -47,7 +47,7 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
 
                 row = {
                     "shop_id": shop_id,
-                    "date": date_display,  # VAN `dt`
+                    "date": date_display,
                     "count_in": safe_int(day_data.get("count_in")),
                     "conversion_rate": safe_float(day_data.get("conversion_rate")),
                     "turnover": safe_float(day_data.get("turnover")),
@@ -55,7 +55,7 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
                 }
                 rows.append(row)
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
     return df
