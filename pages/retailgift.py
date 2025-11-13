@@ -55,10 +55,16 @@ if period_option == "custom":
         start = st.date_input("Van", date.today() - timedelta(days=7), key="start_date")
     with col2:
         end = st.date_input("Tot", date.today(), key="end_date")
+
+    # VALIDEER DATUM
+    if start > end:
+        st.error("**Fout:** 'Van' datum moet vóór 'Tot' datum zijn.")
+        st.stop()
+
     form_date_from = start.strftime("%Y-%m-%d")
     form_date_to = end.strftime("%Y-%m-%d")
 
-# --- 9. API CALL: OF period OF custom dates ---
+# --- 9. API CALL ---
 params = [
     ("period_step", "day"),
     ("source", "shops")
@@ -78,8 +84,26 @@ for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
 query_string = urlencode(params, doseq=True, safe='[]')
 url = f"{API_BASE}/get-report?{query_string}"
 data_response = requests.get(url)
-raw_json = data_response.json()
 
+# DEBUG + ERROR HANDLING
+st.write(f"DEBUG: HTTP Status = {data_response.status_code}")
+st.subheader("DEBUG: API URL")
+st.code(url, language="text")
+
+if data_response.status_code != 200:
+    st.error(f"API fout: {data_response.status_code}")
+    st.code(data_response.text[:500], language="text")
+    st.stop()
+
+try:
+    raw_json = data_response.json()
+except requests.exceptions.JSONDecodeError as e:
+    st.error("**JSON fout:** API gaf geen geldige JSON. Mogelijk ongeldige datums.")
+    st.code(data_response.text[:1000], language="html")
+    st.stop()
+
+st.subheader("DEBUG: Raw JSON (van API)")
+st.json(raw_json, expanded=False)
 # --- 10. DEBUG ---
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
