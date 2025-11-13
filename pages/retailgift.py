@@ -127,7 +127,7 @@ st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", 
 
 # --- 13. AGGREGEER ---
 df = df_raw.copy()
-multi_day_periods = fixed_periods + ["custom"]
+multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date"]  # <--- "date" TOEGEVOEGD
 if period_option in multi_day_periods and len(df) > 1:
     agg = df.groupby("shop_id").agg({
         "count_in": "sum",
