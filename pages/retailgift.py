@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & 100% WERKENDE + GRAFIEK + AI-ACTIES + VRIJE DATUM SELECTOR
+# pages/retailgift.py – FINAL & 100% WERKENDE + VRIJE DATUM OF FIXED PERIODE
 import streamlit as st
 import requests
 import pandas as pd
@@ -6,7 +6,7 @@ import sys
 import os
 from datetime import date, timedelta
 from urllib.parse import urlencode
-import importlib  # <--- VOOR RELOAD
+import importlib
 
 # --- 1. FIX: helpers PATH + RELOAD normalize ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +14,6 @@ helpers_path = os.path.join(current_dir, "..", "helpers")
 if helpers_path not in sys.path:
     sys.path.append(helpers_path)
 
-# RELOAD normalize.py (forceert nieuwe versie)
 import normalize
 importlib.reload(normalize)
 from normalize import normalize_vemcount_response
@@ -44,32 +43,33 @@ locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["da
 selected = st.multiselect("Vestiging(en)", locations, format_func=lambda x: f"{x['name']} – {x.get('zip')}", default=locations[:1])
 shop_ids = [loc["id"] for loc in selected]
 
-# --- 7. PERIODE + DATUM SELECTOR (ALTIJD ZICHTBAAR) ---
-period_options = ["yesterday", "today", "this_week", "last_week", "this_month", "last_month", "date", "custom"]
-period = st.selectbox("Periode", period_options, index=2)
+# --- 7. PERIODE SELECTOR ---
+fixed_periods = ["yesterday", "today", "this_week", "last_week", "this_month", "last_month"]
+period_option = st.selectbox("Periode", fixed_periods + ["custom"], index=2)
 
+# --- 8. DATUM SELECTOR (alleen bij custom) ---
 form_date_from = form_date_to = None
-
-# Datumkiezer altijd tonen (onder periode)
-col1, col2 = st.columns(2)
-with col1:
-    start = st.date_input("Van", date.today() - timedelta(days=7), key="start_date")
-with col2:
-    end = st.date_input("Tot", date.today(), key="end_date")
-
-# Gebruik custom dates bij "date" of "custom"
-if period in ["date", "custom"]:
+if period_option == "custom":
+    col1, col2 = st.columns(2)
+    with col1:
+        start = st.date_input("Van", date.today() - timedelta(days=7), key="start_date")
+    with col2:
+        end = st.date_input("Tot", date.today(), key="end_date")
     form_date_from = start.strftime("%Y-%m-%d")
     form_date_to = end.strftime("%Y-%m-%d")
 
-# --- 8. API CALL ---
+# --- 9. API CALL: OF period OF custom dates ---
 params = [
-    ("period", period),
     ("period_step", "day"),
-    ("source", "shops")  # <--- ESSENTIEEL
+    ("source", "shops")
 ]
-if form_date_from:
+
+if period_option == "custom":
+    params.append(("period", "custom"))
     params.extend([("form_date_from", form_date_from), ("form_date_to", form_date_to)])
+else:
+    params.append(("period", period_option))
+
 for sid in shop_ids:
     params.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
@@ -80,30 +80,30 @@ url = f"{API_BASE}/get-report?{query_string}"
 data_response = requests.get(url)
 raw_json = data_response.json()
 
-# --- 9. DEBUG: API + JSON ---
+# --- 10. DEBUG ---
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
 st.subheader("DEBUG: Raw JSON (van API)")
 st.json(raw_json, expanded=False)
 
-# --- 10. NORMALISEER ---
+# --- 11. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 st.write(f"DEBUG: df_raw.shape = {df_raw.shape}")
 
 if df_raw.empty:
-    st.error(f"Geen data voor {period}. API gaf lege response.")
+    st.error(f"Geen data voor {period_option}. API gaf lege response.")
     st.stop()
 
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- 11. DEBUG: TABEL ---
+# --- 12. DEBUG TABEL ---
 st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
 st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
 
-# --- 12. AGGREGEER ---
+# --- 13. AGGREGEER ---
 df = df_raw.copy()
-multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date", "custom"]
-if period in multi_day_periods and len(df) > 1:
+multi_day_periods = fixed_periods + ["custom"]
+if period_option in multi_day_periods and len(df) > 1:
     agg = df.groupby("shop_id").agg({
         "count_in": "sum",
         "turnover": "sum",
@@ -113,24 +113,25 @@ if period in multi_day_periods and len(df) > 1:
     agg["name"] = agg["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
     df = agg
 
-# --- 13. ROL ---
+# --- 14. ROL ---
 role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"])
 
-# --- 14. UI ---
+# --- 15. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
 st.markdown(f"**{client['name']}** – *Mark Ryski*")
 
 if role == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
-    st.header(f"{row['name']} – {period.capitalize()}")
+    period_display = "custom" if period_option == "custom" else period_option.capitalize()
+    st.header(f"{row['name']} – {period_display}")
     c1, c2, c3, c4 = st.columns(4)
     with c1: kpi_card("Footfall", f"{int(row['count_in']):,}", "", "primary")
     with c2: kpi_card("Conversie", f"{row['conversion_rate']:.1f}%", "", "good" if row['conversion_rate'] >= 25 else "bad")
     with c3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "", "good")
     with c4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "", "neutral")
 
-    # --- GRAFIEK: DAGELIJKSE TRENDS ---
+    # --- GRAFIEK ---
     st.subheader("Trend: Footfall & Conversie per dag")
     chart_data = df_raw[["date", "count_in", "conversion_rate"]].copy()
     chart_data["date"] = pd.to_datetime(chart_data["date"], format="%a. %b %d, %Y")
@@ -143,21 +144,21 @@ if role == "Store Manager" and len(selected) == 1:
         st.line_chart(chart_data.set_index("date")["conversion_rate"], use_container_width=True)
         st.caption("Conversie % per dag")
 
-    # --- AI-ACTIE: SLIMME SUGGESTIE ---
+    # --- AI-ACTIE ---
     footfall = int(row["count_in"])
     conv = row["conversion_rate"]
     spv = row["sales_per_visitor"]
     if footfall == 0:
-        st.warning("**AI Alert:** Geen traffic deze week. Controleer sensoren of openingstijden.")
+        st.warning("**AI Alert:** Geen traffic. Controleer sensoren of openingstijden.")
     elif conv < 12:
-        st.warning(f"**AI Actie:** Conversie laag ({conv:.1f}%). Plan +1 FTE in piekuren (10-12u & 16-18u). +3-5% conversie mogelijk.")
+        st.warning(f"**AI Actie:** Conversie laag ({conv:.1f}%). +1 FTE piekuren → +3-5% conversie.")
     elif spv < 2.5:
-        st.info(f"**AI Tip:** SPV laag (€{spv:.2f}). Train upselling: 'Wil je er een tas bij?' → +€0.50 SPV.")
+        st.info(f"**AI Tip:** SPV laag (€{spv:.2f}). Train upselling.")
     else:
-        st.success("**AI Goed:** Sterke week! Conversie >12%, SPV >€2.50. Focus op loyaliteit.")
+        st.success("**AI Goed:** Sterke week! Focus op loyaliteit.")
 
 elif role == "Regio Manager":
-    st.header(f"Regio – {period.capitalize()}")
+    st.header(f"Regio – {period_option.capitalize()}")
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
     c1, c2, c3 = st.columns(3)
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
@@ -166,11 +167,11 @@ elif role == "Regio Manager":
     st.dataframe(df[["name", "count_in", "conversion_rate"]].sort_values("conversion_rate", ascending=False))
 
 else:
-    st.header(f"Keten – {period.capitalize()}")
+    st.header(f"Keten – {period_option.capitalize()}")
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
     c1, c2, c3 = st.columns(3)
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: `source=shops` + `importlib.reload()` + `normalize.py` + VRIJE DATUM SELECTOR = 100% LIVE.")
+st.caption("RetailGift AI: `period` of `custom` – nooit beide. 100% schoon.")
