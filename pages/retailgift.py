@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & 100% WERKENDE + GRAFIEK + AI-ACTIES
+# pages/retailgift.py – FINAL & 100% WERKENDE + GRAFIEK + AI-ACTIES + VRIJE DATUM SELECTOR
 import streamlit as st
 import requests
 import pandas as pd
@@ -50,7 +50,7 @@ period = st.selectbox("Periode", period_options, index=2)
 
 form_date_from = form_date_to = None
 
-# Datumkiezer altijd tonen
+# Datumkiezer altijd tonen (onder periode)
 col1, col2 = st.columns(2)
 with col1:
     start = st.date_input("Van", date.today() - timedelta(days=7), key="start_date")
@@ -66,7 +66,7 @@ if period in ["date", "custom"]:
 params = [
     ("period", period),
     ("period_step", "day"),
-    ("source", "shops")
+    ("source", "shops")  # <--- ESSENTIEEL
 ]
 if form_date_from:
     params.extend([("form_date_from", form_date_from), ("form_date_to", form_date_to)])
@@ -74,6 +74,11 @@ for sid in shop_ids:
     params.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
     params.append(("data_output[]", output))
+
+query_string = urlencode(params, doseq=True, safe='[]')
+url = f"{API_BASE}/get-report?{query_string}"
+data_response = requests.get(url)
+raw_json = data_response.json()
 
 # --- 9. DEBUG: API + JSON ---
 st.subheader("DEBUG: API URL")
@@ -97,7 +102,7 @@ st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", 
 
 # --- 12. AGGREGEER ---
 df = df_raw.copy()
-multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date"]
+multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date", "custom"]
 if period in multi_day_periods and len(df) > 1:
     agg = df.groupby("shop_id").agg({
         "count_in": "sum",
@@ -130,7 +135,6 @@ if role == "Store Manager" and len(selected) == 1:
     chart_data = df_raw[["date", "count_in", "conversion_rate"]].copy()
     chart_data["date"] = pd.to_datetime(chart_data["date"], format="%a. %b %d, %Y")
     chart_data = chart_data.sort_values("date")
-
     col1, col2 = st.columns(2)
     with col1:
         st.line_chart(chart_data.set_index("date")["count_in"], use_container_width=True)
@@ -143,7 +147,6 @@ if role == "Store Manager" and len(selected) == 1:
     footfall = int(row["count_in"])
     conv = row["conversion_rate"]
     spv = row["sales_per_visitor"]
-
     if footfall == 0:
         st.warning("**AI Alert:** Geen traffic deze week. Controleer sensoren of openingstijden.")
     elif conv < 12:
@@ -170,4 +173,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: `source=shops` + `importlib.reload()` + `normalize.py` = 100% LIVE.")
+st.caption("RetailGift AI: `source=shops` + `importlib.reload()` + `normalize.py` + VRIJE DATUM SELECTOR = 100% LIVE.")
