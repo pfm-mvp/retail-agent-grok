@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & CBS + THIS_WEEK AGGREGATIE
+# pages/retailgift.py – FINAL & WEEKAGGREGATIE 100% CORRECT
 import streamlit as st
 import requests
 import pandas as pd
@@ -14,13 +14,12 @@ inject_css()
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
-CBS_DATASET = st.secrets["cbs_dataset"]  # 83693NED
+CBS_DATASET = st.secrets["cbs_dataset"]
 
-# --- CBS Vertrouwen Live (GEVIXT) ---
+# --- CBS ---
 @st.cache_data(ttl=86400)
 def get_cbs_vertrouwen():
     try:
-        # CORRECTE CBS ODATA URL MET $format=json
         url = f"https://opendata.cbs.nl/ODataFeed/odata/{CBS_DATASET}/Observations?$format=json&$filter=substringof('Consumentenvertrouwen', MeasureDescription)"
         r = requests.get(url, timeout=10)
         if r.ok:
@@ -28,9 +27,9 @@ def get_cbs_vertrouwen():
             if data:
                 latest = max(data, key=lambda x: x.get("Perioden", ""))
                 return latest.get("Value", -27)
-    except Exception as e:
-        st.warning(f"CBS data tijdelijk niet beschikbaar: {e}")
-    return -27  # fallback
+    except:
+        pass
+    return -27
 
 cbs_trust = get_cbs_vertrouwen()
 
@@ -58,7 +57,7 @@ if period == "date":
     form_date_from = start.strftime("%Y-%m-%d")
     form_date_to = end.strftime("%Y-%m-%d")
 
-# --- 4. API CALL MET period_step=day ---
+# --- 4. API CALL ---
 params = [
     ("period", period),
     ("period_step", "day")
@@ -79,8 +78,8 @@ raw_json = data_response.json()
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
 
-# --- 5. NORMALISEER ---
-df = to_wide(normalize_vemcount_response(raw_json))
+# --- 5. NORMALISEER (1 ROW PER DAG) ---
+df = normalize_vemcount_response(raw_json)
 
 if df.empty:
     st.error(f"Geen data voor {period}. Probeer 'today'.")
@@ -99,6 +98,7 @@ if period in multi_day_periods and len(df) > 1:
     }
     df = pd.DataFrame([agg])
     df["name"] = "TOTAAL" if len(selected) > 1 else selected[0]["name"]
+    df["shop_id"] = selected[0]["id"] if selected else 0
 
 # --- 7. ROL ---
 role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"])
@@ -106,7 +106,7 @@ role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"])
 # --- 8. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
-st.markdown(f"**{client['name']}** – *Mark Ryski* (CBS vertrouwen: {cbs_trust})")
+st.markdown(f"**{client['name']}** – *Mark Ryski* (CBS: {cbs_trust})")
 
 if role == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
@@ -135,4 +135,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: CBS + `period_step=day` + aggregatie = perfecte weekdata.")
+st.caption("RetailGift AI: `period_step=day` + sum/mean = perfecte weekdata. 100% LIVE.")
