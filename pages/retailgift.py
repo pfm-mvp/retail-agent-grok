@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & WEEKAGGREGATIE WERKT
+# pages/retailgift.py – FINAL & KeyError GEVIXT
 import streamlit as st
 import requests
 import pandas as pd
@@ -59,9 +59,6 @@ raw_json = data_response.json()
 # --- DEBUG ---
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
-st.subheader("DEBUG: Raw DF (voor aggregatie)")
-df_raw = normalize_vemcount_response(raw_json)
-st.dataframe(df_raw)
 
 # --- 5. NORMALISEER (1 ROW PER DAG) ---
 df_raw = normalize_vemcount_response(raw_json)
@@ -70,11 +67,18 @@ if df_raw.empty:
     st.error(f"Geen data voor {period}. Probeer 'today'.")
     st.stop()
 
+# --- VEILIGE KOLOMMEN ---
+required_cols = ["date", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]
+available_cols = [col for col in required_cols if col in df_raw.columns]
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
 # --- DEBUG: RAW TABEL MET DATUM ---
 st.subheader("DEBUG: Raw Data (alle dagen)")
-st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
+if available_cols:
+    debug_cols = ["date", "name"] + available_cols
+    st.dataframe(df_raw[debug_cols])
+else:
+    st.dataframe(df_raw)
 
 # --- 6. AGGREGEER VOOR WEEK ---
 df = df_raw.copy()
@@ -89,10 +93,10 @@ if period in multi_day_periods and len(df) > 1:
     df = pd.DataFrame([agg])
     df["name"] = "TOTAAL" if len(selected) > 1 else df_raw["name"].iloc[0]
 
-# --- 6. ROL ---
+# --- 7. ROL ---
 role = st.selectbox("Rol", ["Store Manager", "Regio Manager", "Directie"])
 
-# --- 7. UI ---
+# --- 8. UI ---
 st.image("https://i.imgur.com/8Y5fX5P.png", width=300)
 st.title("STORE TRAFFIC IS A GIFT")
 st.markdown(f"**{client['name']}** – *Mark Ryski*")
@@ -124,4 +128,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: 1 row per dag → sum/mean = perfecte weekdata.")
+st.caption("RetailGift AI: `date` kolom + sum/mean = perfecte weekdata.")
