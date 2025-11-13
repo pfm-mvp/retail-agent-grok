@@ -1,4 +1,4 @@
-# helpers/normalize.py – FINAL & date + MULTI-DAY
+# helpers/normalize.py – FINAL & 100% MULTI-DAY + date
 import pandas as pd
 from typing import Dict, Any
 from datetime import datetime
@@ -7,28 +7,33 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
     rows = []
     data = response.get("data", {})
     
+    # LOOP OVER PERIOD (bijv. "last_week")
     for period_key, shops in data.items():
+        # LOOP OVER SHOP
         for shop_id_str, shop_info in shops.items():
             try:
                 shop_id = int(shop_id_str)
             except:
                 continue
 
-            dates = shop_info.get("dates", {})
-            if not isinstance(dates, dict):
+            # GET DATES DICT
+            dates_dict = shop_info.get("dates", {})
+            if not isinstance(dates_dict, dict):
                 continue
 
-            for date_label, date_entry in dates.items():
+            # LOOP OVER ELKE DAG
+            for date_label, date_entry in dates_dict.items():
                 day_data = date_entry.get("data", {}) if isinstance(date_entry, dict) else {}
 
-                # Gebruik dt als bron voor datum
+                # GEBRUIK `dt` VOOR DATUM
                 dt_raw = day_data.get("dt", "")
                 try:
                     dt_obj = datetime.fromisoformat(dt_raw.replace(" ", "T"))
-                    date_display = dt_obj.strftime("%a. %b %d, %Y")  # Mon. Nov 10, 2025
+                    date_display = dt_obj.strftime("%a. %b %d, %Y")
                 except:
                     date_display = date_label
 
+                # SAFE PARSING
                 def safe_float(val, default=0.0):
                     try:
                         return float(val) if val is not None else default
