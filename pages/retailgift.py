@@ -85,14 +85,18 @@ st.json(raw_json, expanded=False)
 # --- 5. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
+if df_raw.empty:
+    st.error(f"Geen data voor {period}. API gaf lege response.")
+    st.stop()
+
+# --- name TOEVOEGEN VOOR DEBUG ---
+df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
+
 # --- DEBUG: VEILIGE TABEL ---
 st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
 desired_cols = ["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]
 available_cols = [col for col in desired_cols if col in df_raw.columns]
-if available_cols:
-    st.dataframe(df_raw[available_cols])
-else:
-    st.dataframe(df_raw)
+st.dataframe(df_raw[available_cols])
 
 # --- STOP ALLEEN ALS ECHT LEEG ---
 if df_raw.empty:
