@@ -15,10 +15,11 @@ if root_path not in sys.path:
 
 # --- IMPORTS MET FALLBACK ---
 try:
-    from helpers.ui import inject_css, kpi_card
-except:
-    def inject_css(): st.markdown("", unsafe_allow_html=True)
-    def kpi_card(t, v, d, c): st.metric(t, v, d)
+    from helpers.normalize import normalize_vemcount_response, to_wide
+except Exception as e:
+    st.error(f"Normalize fallback! Import error: {e}")
+    def normalize_vemcount_response(x): return pd.DataFrame()
+    def to_wide(df): return df
 
 try:
     from helpers.normalize import normalize_vemcount_response, to_wide
