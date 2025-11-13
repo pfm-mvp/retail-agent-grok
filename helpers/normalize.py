@@ -1,4 +1,4 @@
-# helpers/normalize.py – FINAL & 1 ROW PER DAG + DATUM
+# helpers/normalize.py – FINAL & date KOLOM
 import pandas as pd
 from typing import Dict
 
@@ -31,7 +31,7 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
 
                 row = {
                     "shop_id": shop_id,
-                    "date": date_key,  # <-- DATUM KOLOM
+                    "date": date_key,  # <-- DATE KOLOM
                     "count_in": safe_int(day_data.get("count_in")),
                     "conversion_rate": safe_float(day_data.get("conversion_rate")),
                     "turnover": safe_float(day_data.get("turnover")),
