@@ -60,25 +60,25 @@ raw_json = data_response.json()
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
 
-# --- 5. NORMALISEER (1 ROW PER DAG) ---
+# --- 5. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
 if df_raw.empty:
     st.error(f"Geen data voor {period}. Probeer 'today'.")
     st.stop()
 
-# --- VEILIGE KOLOMMEN ---
-required_cols = ["date", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]
-available_cols = [col for col in required_cols if col in df_raw.columns]
+# --- EERST NAME TOEVOEGEN ---
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- DEBUG: RAW TABEL MET DATUM ---
+# --- VEILIGE DEBUG KOLOMMEN ---
+base_cols = ["date", "name"]
+kpi_cols = ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]
+available_kpi = [col for col in kpi_cols if col in df_raw.columns]
+debug_cols = base_cols + available_kpi
+
+# --- DEBUG: RAW TABEL ---
 st.subheader("DEBUG: Raw Data (alle dagen)")
-if available_cols:
-    debug_cols = ["date", "name"] + available_cols
-    st.dataframe(df_raw[debug_cols])
-else:
-    st.dataframe(df_raw)
+st.dataframe(df_raw[debug_cols])
 
 # --- 6. AGGREGEER VOOR WEEK ---
 df = df_raw.copy()
@@ -128,4 +128,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: `date` kolom + sum/mean = perfecte weekdata.")
+st.caption("RetailGift AI: `date` + veilige kolommen = 100% LIVE.")
