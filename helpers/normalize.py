@@ -1,37 +1,6 @@
-# helpers/normalize.py – FINAL & WERKT MET JOUW API
+# helpers/normalize.py – FINAL & 1 ROW PER DAG
 import pandas as pd
 from typing import Dict, Any
-
-def extract_latest_data(shop_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract latest day data – safe voor missing keys"""
-    dates = shop_data.get("dates", {})
-    if not dates:
-        return {"count_in": 0, "conversion_rate": 0.0, "turnover": 0.0, "sales_per_visitor": 0.0}
-
-    # Neem laatste datum
-    latest_date = sorted(dates.keys())[-1]
-    day_data = dates[latest_date].get("data", {})
-
-    def safe_int(key, default=0):
-        val = day_data.get(key)
-        try:
-            return int(float(val)) if val is not None else default
-        except:
-            return default
-
-    def safe_float(key, default=0.0):
-        val = day_data.get(key)
-        try:
-            return float(val) if val is not None else default
-        except:
-            return default
-
-    return {
-        "count_in": safe_int("count_in", 0),
-        "conversion_rate": safe_float("conversion_rate", 0.0) * 100,  # % weergave
-        "turnover": safe_float("turnover", 0.0),
-        "sales_per_visitor": safe_float("sales_per_visitor", 0.0)
-    }
 
 def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
     rows = []
@@ -44,12 +13,31 @@ def normalize_vemcount_response(response: Dict) -> pd.DataFrame:
             except:
                 continue
 
-            kpi = extract_latest_data(shop_info)
-            row = {
-                "shop_id": shop_id,
-                **kpi
-            }
-            rows.append(row)
+            dates = shop_info.get("dates", {})
+            for date_key, date_data in dates.items():
+                day = date_data.get("data", {})
+                
+                def safe_float(val, default=0.0):
+                    try:
+                        return float(val) if val is not None else default
+                    except:
+                        return default
+
+                def safe_int(val, default=0):
+                    try:
+                        return int(float(val)) if val is not None else default
+                    except:
+                        return default
+
+                row = {
+                    "shop_id": shop_id,
+                    "date": date_key,
+                    "count_in": safe_int(day.get("count_in")),
+                    "conversion_rate": safe_float(day.get("conversion_rate")),
+                    "turnover": safe_float(day.get("turnover")),
+                    "sales_per_visitor": safe_float(day.get("sales_per_visitor"))
+                }
+                rows.append(row)
     
     return pd.DataFrame(rows)
 
