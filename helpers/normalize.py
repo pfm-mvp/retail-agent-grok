@@ -14,12 +14,10 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
             except (ValueError, TypeError):
                 continue
 
-            # GET DATES DICT
             dates_dict = shop_info.get("dates", {})
             if not isinstance(dates_dict, dict):
                 continue
 
-            # LOOP OVER ELKE DAG
             for date_label, date_entry in dates_dict.items():
                 day_data = date_entry.get("data", {}) if isinstance(date_entry, dict) else {}
 
@@ -55,7 +53,8 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
                 }
                 rows.append(row)
 
-    return pd.DataFrame(rows) if rows else pd.DataFrame()
+    # RETURN LEEG DataFrame ALLEEN ALS GEEN ROWS
+    return pd.DataFrame(rows) if rows else pd.DataFrame(columns=["shop_id", "date", "count_in", "conversion_rate", "turnover", "sales_per_visitor"])
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
     return df
