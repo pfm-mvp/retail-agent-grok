@@ -82,16 +82,15 @@ st.code(url, language="text")
 # --- 5. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
-# --- VALIDEER DATA (NIET ALLEEN empty) ---
-if df_raw.empty or "date" not in df_raw.columns or len(df_raw) == 0:
-    st.warning(f"Geen data voor **{period}**. Probeer 'today' of 'yesterday'.")
+if df_raw.empty:
+    st.error(f"Geen data voor {period}. API gaf lege response.")
     st.stop()
 
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- DEBUG: TOON ALLES ---
-st.subheader("DEBUG: Raw Data (ALLE DAGEN VAN FIXED PERIOD)")
-st.dataframe(df_raw)
+# --- DEBUG: ALLE DAGEN ---
+st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
+st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate"]])
 
 # --- 6. AGGREGEER ---
 df = df_raw.copy()
