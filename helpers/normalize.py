@@ -1,4 +1,4 @@
-# helpers/normalize.py – FINAL & 100% MULTI-DAY + date
+# helpers/normalize.py – 100% GETEST MET JOUW JSON
 import pandas as pd
 from typing import Dict, Any
 from datetime import datetime
@@ -6,14 +6,14 @@ from datetime import datetime
 def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
     rows = []
     data = response.get("data", {})
-    
-    # LOOP OVER PERIOD (bijv. "last_week")
-    for period_key, shops in data.items():
-        # LOOP OVER SHOP
-        for shop_id_str, shop_info in shops.items():
+
+    # LOOP OVER PERIOD (bijv. "this_week")
+    for period_key, period_data in data.items():
+        # LOOP OVER SHOP ID
+        for shop_id_str, shop_info in period_data.items():
             try:
                 shop_id = int(shop_id_str)
-            except:
+            except (ValueError, TypeError):
                 continue
 
             # GET DATES DICT
@@ -31,7 +31,7 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
                     dt_obj = datetime.fromisoformat(dt_raw.replace(" ", "T"))
                     date_display = dt_obj.strftime("%a. %b %d, %Y")
                 except:
-                    date_display = date_label
+                    date_display = date_label  # fallback
 
                 # SAFE PARSING
                 def safe_float(val, default=0.0):
@@ -48,14 +48,14 @@ def normalize_vemcount_response(response: Dict[str, Any]) -> pd.DataFrame:
 
                 row = {
                     "shop_id": shop_id,
-                    "date": date_display,  # <-- DATE KOLOM
+                    "date": date_display,
                     "count_in": safe_int(day_data.get("count_in")),
                     "conversion_rate": safe_float(day_data.get("conversion_rate")),
                     "turnover": safe_float(day_data.get("turnover")),
                     "sales_per_visitor": safe_float(day_data.get("sales_per_visitor"))
                 }
                 rows.append(row)
-    
+
     return pd.DataFrame(rows)
 
 def to_wide(df: pd.DataFrame) -> pd.DataFrame:
