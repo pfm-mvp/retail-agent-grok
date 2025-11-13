@@ -9,9 +9,9 @@ from urllib.parse import urlencode
 
 # --- FIX: helpers PATH ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-helpers_path = os.path.join(current_dir, "..", "helpers")
-if helpers_path not in sys.path:
-    sys.path.append(helpers_path)
+root_path = os.path.join(current_dir, "..")  # project root
+if root_path not in sys.path:
+    sys.path.append(root_path)
 
 # --- IMPORTS MET FALLBACK ---
 try:
