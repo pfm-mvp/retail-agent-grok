@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & 100% WERKENDE
+# pages/retailgift.py – FINAL & 100% WERKENDE + GRAFIEK + AI-ACTIES
 import streamlit as st
 import requests
 import pandas as pd
@@ -79,13 +79,11 @@ raw_json = data_response.json()
 # --- 9. DEBUG: API + JSON ---
 st.subheader("DEBUG: API URL")
 st.code(url, language="text")
-
 st.subheader("DEBUG: Raw JSON (van API)")
 st.json(raw_json, expanded=False)
 
 # --- 10. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
-
 st.write(f"DEBUG: df_raw.shape = {df_raw.shape}")
 
 if df_raw.empty:
@@ -127,7 +125,34 @@ if role == "Store Manager" and len(selected) == 1:
     with c2: kpi_card("Conversie", f"{row['conversion_rate']:.1f}%", "", "good" if row['conversion_rate'] >= 25 else "bad")
     with c3: kpi_card("Omzet", f"€{int(row['turnover']):,}", "", "good")
     with c4: kpi_card("SPV", f"€{row['sales_per_visitor']:.2f}", "", "neutral")
-    st.success("**Actie:** +2 FTE piekuren → +5-10% conversie (Ryski Ch3)")
+
+    # --- GRAFIEK: DAGELIJKSE TRENDS ---
+    st.subheader("Trend: Footfall & Conversie per dag")
+    chart_data = df_raw[["date", "count_in", "conversion_rate"]].copy()
+    chart_data["date"] = pd.to_datetime(chart_data["date"], format="%a. %b %d, %Y")
+    chart_data = chart_data.sort_values("date")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.line_chart(chart_data.set_index("date")["count_in"], use_container_width=True)
+        st.caption("Footfall per dag")
+    with col2:
+        st.line_chart(chart_data.set_index("date")["conversion_rate"], use_container_width=True)
+        st.caption("Conversie % per dag")
+
+    # --- AI-ACTIE: SLIMME SUGGESTIE ---
+    footfall = int(row["count_in"])
+    conv = row["conversion_rate"]
+    spv = row["sales_per_visitor"]
+
+    if footfall == 0:
+        st.warning("**AI Alert:** Geen traffic deze week. Controleer sensoren of openingstijden.")
+    elif conv < 12:
+        st.warning(f"**AI Actie:** Conversie laag ({conv:.1f}%). Plan +1 FTE in piekuren (10-12u & 16-18u). +3-5% conversie mogelijk.")
+    elif spv < 2.5:
+        st.info(f"**AI Tip:** SPV laag (€{spv:.2f}). Train upselling: 'Wil je er een tas bij?' → +€0.50 SPV.")
+    else:
+        st.success("**AI Goed:** Sterke week! Conversie >12%, SPV >€2.50. Focus op loyaliteit.")
 
 elif role == "Regio Manager":
     st.header(f"Regio – {period.capitalize()}")
