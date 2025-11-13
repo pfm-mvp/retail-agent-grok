@@ -67,14 +67,13 @@ if df_raw.empty:
     st.error(f"Geen data voor {period}. Probeer 'today'.")
     st.stop()
 
-# --- EERST NAME TOEVOEGEN ---
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- DEBUG: ALLE KOLOMMEN ---
-st.subheader("DEBUG: Raw Data (alle dagen)")
-st.dataframe(df_raw)
+# --- DEBUG: ALLE DAGEN ---
+st.subheader("DEBUG: Raw Data (ALLE DAGEN VAN FIXED PERIOD)")
+st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
 
-# --- 6. AGGREGEER VOOR WEEK ---
+# --- 6. AGGREGEER ---
 df = df_raw.copy()
 multi_day_periods = ["this_week", "last_week", "this_month", "last_month", "date"]
 if period in multi_day_periods and len(df) > 1:
