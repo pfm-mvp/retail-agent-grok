@@ -84,20 +84,23 @@ st.subheader("DEBUG: Raw JSON (van API)")
 st.json(raw_json, expanded=False)  # <--- NU WERKT
 
 # --- 5. NORMALISEER ---
-df_raw = normalize_vemcount_response(raw_json)
+# df_raw = normalize_vemcount_response(raw_json)  # <--- COMMENT UIT
 
-# --- DEBUG: TOON AANTAL RIJEN ---
-st.write(f"DEBUG: df_raw.shape = {df_raw.shape}")
-st.write(f"DEBUG: df_raw.empty = {df_raw.empty}")
+# HARD CODE TEST IN MAIN
+df_raw = pd.DataFrame([
+    {"shop_id": 29641, "date": "Mon. Nov 10, 2025", "count_in": 264, "conversion_rate": 14.39, "turnover": 654.44, "sales_per_visitor": 2.48},
+    {"shop_id": 29641, "date": "Tue. Nov 11, 2025", "count_in": 426, "conversion_rate": 16.2, "turnover": 1325.32, "sales_per_visitor": 3.11},
+    {"shop_id": 29641, "date": "Wed. Nov 12, 2025", "count_in": 168, "conversion_rate": 13.1, "turnover": 409.74, "sales_per_visitor": 2.44},
+    {"shop_id": 29641, "date": "Thu. Nov 13, 2025", "count_in": 48, "conversion_rate": 0.0, "turnover": 0.0, "sales_per_visitor": 0.0},
+])
+
+st.write(f"DEBUG: HARD CODE TEST – df_raw.shape = {df_raw.shape}")
 
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
     st.stop()
 
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
-
-st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
-st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
 
 # --- 6. AGGREGEER ---
 df = df_raw.copy()
