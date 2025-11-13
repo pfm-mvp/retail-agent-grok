@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & KeyError GEVIXT
+# pages/retailgift.py – FINAL & KeyError + MULTI-DAY GEVIXT
 import streamlit as st
 import requests
 import pandas as pd
@@ -69,9 +69,14 @@ if df_raw.empty:
 
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- DEBUG: ALLE DAGEN ---
+# --- DEBUG: VEILIGE TABEL ---
 st.subheader("DEBUG: Raw Data (ALLE DAGEN VAN FIXED PERIOD)")
-st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
+desired_cols = ["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]
+available_cols = [col for col in desired_cols if col in df_raw.columns]
+if available_cols:
+    st.dataframe(df_raw[available_cols])
+else:
+    st.dataframe(df_raw)
 
 # --- 6. AGGREGEER ---
 df = df_raw.copy()
@@ -121,4 +126,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: `date` kolom + alle kolommen debug = 100% LIVE.")
+st.caption("RetailGift AI: veilige kolommen + multi-day = 100% LIVE.")
