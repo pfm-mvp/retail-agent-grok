@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & DEBUG AANGEPAST
+# pages/retailgift.py – FINAL & KeyError + DEBUG GEVIXT
 import streamlit as st
 import requests
 import pandas as pd
@@ -80,19 +80,26 @@ st.subheader("DEBUG: API URL")
 st.code(url, language="text")
 
 st.subheader("DEBUG: Raw JSON (van API)")
-st.json(raw_json, expanded=False)  # <-- DEBUG JSON
+st.json(raw_json, expanded=False)
 
 # --- 5. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
-# --- DEBUG: TOON ALTIJD ---
+# --- DEBUG: VEILIGE TABEL ---
 st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
-st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
+desired_cols = ["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]
+available_cols = [col for col in desired_cols if col in df_raw.columns]
+if available_cols:
+    st.dataframe(df_raw[available_cols])
+else:
+    st.dataframe(df_raw)
 
 # --- STOP ALLEEN ALS ECHT LEEG ---
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
     st.stop()
+
+df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
 # --- 6. AGGREGEER ---
 df = df_raw.copy()
@@ -142,4 +149,4 @@ else:
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 
-st.caption("RetailGift AI: DEBUG + multi-day + `dt` = 100% LIVE.")
+st.caption("RetailGift AI: veilige kolommen + multi-day = 100% LIVE.")
