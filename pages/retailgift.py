@@ -85,15 +85,14 @@ st.json(raw_json, expanded=False)  # <-- DEBUG JSON
 # --- 5. NORMALISEER ---
 df_raw = normalize_vemcount_response(raw_json)
 
+# --- DEBUG: TOON ALTIJD ---
+st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
+st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
+
+# --- STOP ALLEEN ALS ECHT LEEG ---
 if df_raw.empty:
     st.error(f"Geen data voor {period}. API gaf lege response.")
     st.stop()
-
-df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
-
-# --- DEBUG: ALLE DAGEN ---
-st.subheader("DEBUG: Raw Data (ALLE DAGEN)")
-st.dataframe(df_raw[["date", "name", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]])
 
 # --- 6. AGGREGEER ---
 df = df_raw.copy()
