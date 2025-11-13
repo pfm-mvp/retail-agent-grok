@@ -61,7 +61,8 @@ if period == "date":
 # --- 4. API CALL ---
 params = [
     ("period", period),
-    ("period_step", "day")
+    ("period_step", "day"),
+    ("source", "shops")  # <--- ESSENTIEEL
 ]
 if form_date_from:
     params.extend([("form_date_from", form_date_from), ("form_date_to", form_date_to)])
@@ -72,8 +73,6 @@ for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
 
 query_string = urlencode(params, doseq=True, safe='[]')
 url = f"{API_BASE}/get-report?{query_string}"
-data_response = requests.get(url)
-raw_json = data_response.json()
 
 # --- DEBUG: API URL + RAW JSON ---
 st.subheader("DEBUG: API URL")
