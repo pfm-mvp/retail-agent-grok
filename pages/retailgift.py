@@ -97,18 +97,19 @@ df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locati
 df_raw["date"] = pd.to_datetime(df_raw["date"], format="%a. %b %d, %Y")
 
 # --- 8. FILTER OP PERIODE ---
-today = date.today()
-df_raw["date"] = pd.to_datetime(df_raw["date"], format="%a. %b %d, %Y")
+today = pd.Timestamp.today().normalize()  # <--- pd.Timestamp
+df_raw["date"] = pd.to_datetime(df_raw["date"]).dt.normalize()  # <--- normalize
 
-# Altijd definiëren
-start_week = today - timedelta(days=today.weekday())
-start_last_week = start_week - timedelta(days=7)
-end_last_week = start_week - timedelta(days=1)
+# Alle datums als pd.Timestamp
+start_week = today - pd.Timedelta(days=today.weekday())
+start_last_week = start_week - pd.Timedelta(days=7)
+end_last_week = start_week - pd.Timedelta(days=1)
 first_of_month = today.replace(day=1)
-last_month = (first_of_month - timedelta(days=1)).replace(day=1)
+last_month = (first_of_month - pd.Timedelta(days=1)).replace(day=1)
 
 if period_option == "yesterday":
-    df_raw = df_raw[df_raw["date"] == (today - timedelta(days=1))]
+    target = today - pd.Timedelta(days=1)
+    df_raw = df_raw[df_raw["date"] == target]
 elif period_option == "today":
     df_raw = df_raw[df_raw["date"] == today]
 elif period_option == "this_week":
@@ -119,9 +120,11 @@ elif period_option == "this_month":
     df_raw = df_raw[df_raw["date"] >= first_of_month]
 elif period_option == "last_month":
     next_month = first_of_month + pd.DateOffset(months=1)
-    df_raw = df_raw[(df_raw["date"] >= last_month) & (df_raw["date"] < first_of_month)]
+    df_raw = df_raw[(df_raw["date"] >= last_month) & (df_raw["date"] < next_month)]
 elif period_option == "date":
-    df_raw = df_raw[(df_raw["date"] >= pd.to_datetime(form_date_from)) & (df_raw["date"] <= pd.to_datetime(form_date_to))]
+    start = pd.to_datetime(form_date_from)
+    end = pd.to_datetime(form_date_to)
+    df_raw = df_raw[(df_raw["date"] >= start) & (df_raw["date"] <= end)]
 
 # --- 9. AGGREGEER ---
 df = df_raw.groupby("shop_id").agg({
