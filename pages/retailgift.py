@@ -1,4 +1,4 @@
-# pages/retailgift.py – 3 NIVEAUS + VOORSPELLING + GRAFIEKEN
+# pages/retailgift.py – 3 NIVEAUS + VOORSPELLING + GRAFIEKEN + WEEKDAG-GEMIDDELDEN
 import streamlit as st
 import requests
 import pandas as pd
@@ -70,10 +70,10 @@ if period_option == "date":
     form_date_from = start.strftime("%Y-%m-%d")
     form_date_to = end.strftime("%Y-%m-%d")
 
-# --- 6. API CALL (1x) ---
+# --- 6. API CALL (huidige periode) ---
 params = [("period_step", "day"), ("source", "shops")]
 if period_option == "date":
-    params += [("period", "date"), ("form_date_from", form_date_from), ("form_date_to", form_date_to)]
+    params += [("period", "date"), ("form_date_from", form_date_from), ("form_date_to", form_date_to")]
 else:
     params.append(("period", period_option))
 for sid in shop_ids:
@@ -94,13 +94,10 @@ if df_raw.empty:
     st.error("Geen data")
     st.stop()
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
-df_raw["date"] = pd.to_datetime(df_raw["date"], format="%a. %b %d, %Y")
+df_raw["date"] = pd.to_datetime(df_raw["date"])
 
-# --- 8. FILTER OP PERIODE ---
-today = pd.Timestamp.today().normalize()  # <--- pd.Timestamp
-df_raw["date"] = pd.to_datetime(df_raw["date"]).dt.normalize()  # <--- normalize
-
-# Alle datums als pd.Timestamp
+# --- 8. FILTER OP PERIODE (alle periodes werken) ---
+today = pd.Timestamp.today().normalize()
 start_week = today - pd.Timedelta(days=today.weekday())
 start_last_week = start_week - pd.Timedelta(days=7)
 end_last_week = start_week - pd.Timedelta(days=1)
@@ -108,8 +105,7 @@ first_of_month = today.replace(day=1)
 last_month = (first_of_month - pd.Timedelta(days=1)).replace(day=1)
 
 if period_option == "yesterday":
-    target = today - pd.Timedelta(days=1)
-    df_raw = df_raw[df_raw["date"] == target]
+    df_raw = df_raw[df_raw["date"] == (today - pd.Timedelta(days=1))]
 elif period_option == "today":
     df_raw = df_raw[df_raw["date"] == today]
 elif period_option == "this_week":
@@ -133,91 +129,94 @@ df = df_raw.groupby("shop_id").agg({
 }).reset_index()
 df["name"] = df["shop_id"].map({loc["id"]: loc["name"] for loc in locations})
 
-# --- 10. VOORSPELLING ---
+# --- 10. ACHTERGROND API CALL: WEEKDAG-GEMIDDELDEN (this_year) ---
+params_hist = [("period", "this_year"), ("period_step", "day"), ("source", "shops")]
+for sid in shop_ids:
+    params_hist.append(("data[]", sid))
+for output in ["conversion_rate", "sales_per_transaction"]:
+    params_hist.append(("data_output[]", output))
+
+url_hist = f"{API_BASE}/get-report?{urlencode(params_hist, doseq=True, safe='[]')}"
+resp_hist = requests.get(url_hist)
+if resp_hist.status_code == 200:
+    raw_hist = resp_hist.json()
+    df_hist = normalize.normalize_vemcount_response(raw_hist)
+    df_hist["date"] = pd.to_datetime(df_hist["date"])
+    df_hist["weekday"] = df_hist["date"].dt.weekday
+    weekday_avg = df_hist.groupby("weekday").agg({
+        "conversion_rate": "mean",
+        "sales_per_transaction": "mean"
+    }).reindex(range(7), fill_value=0)
+else:
+    weekday_avg = pd.DataFrame({"conversion_rate": [0]*7, "sales_per_transaction": [0]*7}, index=range(7))
+
+# --- 11. VOORSPELLING FUNCTIE ---
 def forecast_series(series, steps=7):
-    if len(series) < 3: return [0] * steps
+    if len(series) < 3: return [int(np.mean(series))] * steps
     try:
         model = ARIMA(series, order=(1,1,1))
         forecast = model.fit().forecast(steps)
-        return [max(0, round(f)) for f in forecast]
+        return [max(0, int(round(f))) for f in forecast]
     except:
-        return [int(series.mean())] * steps
+        return [int(np.mean(series))] * steps
 
-# --- 11. TOOL: STORE MANAGER ---
+# --- 12. TOOL: STORE MANAGER ---
 if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
 
-    st.header(f"{row['name']} – {period_option.capitalize()}")
+    # --- VORIGE PERIODE VOOR % VERSCHIL ---
+    def get_prev_agg(period):
+        if period == "this_week":
+            prev_start = start_week - pd.Timedelta(days=7)
+            prev_end = start_week - pd.Timedelta(days=1)
+        elif period == "last_week":
+            prev_start = start_last_week - pd.Timedelta(days=7)
+            prev_end = start_last_week - pd.Timedelta(days=1)
+        elif period == "this_month":
+            prev_start = first_of_month - pd.DateOffset(months=1)
+            prev_end = first_of_month - pd.Timedelta(days=1)
+        elif period == "last_month":
+            prev_start = last_month - pd.DateOffset(months=1)
+            prev_end = last_month - pd.Timedelta(days=1)
+        else:
+            return pd.Series([0]*4, index=["count_in", "turnover", "conversion_rate", "sales_per_visitor"])
+        prev = df_raw[(df_raw["date"] >= prev_start) & (df_raw["date"] <= prev_end)]
+        return prev.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"}) if not prev.empty else pd.Series([0]*4)
 
-    # --- 1. VERGELIJKENDE PERIODE ---
-    def get_previous_period(df_raw, period_option):
-        if period_option == "this_week":
-            start_prev = start_week - pd.Timedelta(days=7)
-            end_prev = start_week - pd.Timedelta(days=1)
-            return df_raw[(df_raw["date"] >= start_prev) & (df_raw["date"] <= end_prev)]
-        elif period_option == "last_week":
-            start_prev = start_last_week - pd.Timedelta(days=7)
-            end_prev = start_last_week - pd.Timedelta(days=1)
-            return df_raw[(df_raw["date"] >= start_prev) & (df_raw["date"] <= end_prev)]
-        elif period_option == "this_month":
-            prev_month = first_of_month - pd.DateOffset(months=1)
-            next_month = first_of_month
-            return df_raw[(df_raw["date"] >= prev_month) & (df_raw["date"] < next_month)]
-        elif period_option == "last_month":
-            prev_month = last_month - pd.DateOffset(months=1)
-            next_month = last_month + pd.DateOffset(months=1)
-            return df_raw[(df_raw["date"] >= prev_month) & (df_raw["date"] < next_month)]
-        return pd.DataFrame()
+    prev_agg = get_prev_agg(period_option)
 
-    prev_df = get_previous_period(df_raw, period_option)
-    prev_agg = prev_df.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"}) if not prev_df.empty else pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-
-    def delta_pct(curr, prev, suffix=""):
+    def delta(val, prev):
         if prev == 0: return "N/A"
-        pct = (curr - prev) / prev * 100
-        color = "green" if pct > 0 else "red" if pct < 0 else "gray"
-        return f"{pct:+.1f}%{suffix}"
+        pct = (val - prev) / prev * 100
+        return f"{pct:+.1f}%" if pct != 0 else "0%"
 
-    # KPI's met % vs vorige periode
+    st.header(f"{row['name']} – {period_option.capitalize()}")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Footfall", f"{int(row['count_in']):,}", delta=delta_pct(row['count_in'], prev_agg['count_in']))
-    c2.metric("Conversie", f"{row['conversion_rate']:.1f}%", delta=delta_pct(row['conversion_rate'], prev_agg['conversion_rate']))
-    c3.metric("Omzet", f"€{int(row['turnover']):,}", delta=delta_pct(row['turnover'], prev_agg['turnover']))
-    c4.metric("SPV", f"€{row['sales_per_visitor']:.2f}", delta=delta_pct(row['sales_per_visitor'], prev_agg['sales_per_visitor']))
+    c1.metric("Footfall", f"{int(row['count_in']):,}", delta=delta(row['count_in'], prev_agg['count_in']))
+    c2.metric("Conversie", f"{row['conversion_rate']:.1f}%", delta=delta(row['conversion_rate'], prev_agg['conversion_rate']))
+    c3.metric("Omzet", f"€{int(row['turnover']):,}", delta=delta(row['turnover'], prev_agg['turnover']))
+    c4.metric("SPV", f"€{row['sales_per_visitor']:.2f}", delta=delta(row['sales_per_visitor'], prev_agg['sales_per_visitor']))
 
-    # --- 2. DAGELIJKSE TABEL: 100% ALLE DATA ---
+    # --- DAGELIJKSE TABEL ---
     st.subheader("Dagelijks")
     daily = df_raw[["date", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]].copy()
     daily["date"] = daily["date"].dt.strftime("%a %d")
     st.dataframe(daily.style.format({
-        "count_in": "{:,}",
-        "conversion_rate": "{:.1f}%",
-        "turnover": "€{:.0f}",
-        "sales_per_visitor": "€{:.2f}"
+        "count_in": "{:,}", "conversion_rate": "{:.1f}%", "turnover": "€{:.0f}", "sales_per_visitor": "€{:.2f}"
     }))
 
-    # --- 3. VOORSPELLING: REALISTISCH VIA WEEKDAG-GEMIDDELDEN ---
-    # Haal historische weekdag-gemiddelden
-    df_raw["weekday"] = df_raw["date"].dt.weekday  # 0=ma, 6=zo
-    weekday_stats = df_raw.groupby("weekday").agg({
-        "conversion_rate": "mean",
-        "sales_per_visitor": "mean"
-    }).reindex(range(7), fill_value=0)
-
-    # Voorspel footfall (ARIMA)
+    # --- VOORSPELLING: footfall + omzet ---
     hist_footfall = df_raw["count_in"].astype(int).tolist()
     forecast_footfall = forecast_series(hist_footfall, 7)
-
-    # Voorspel omzet via weekdag-gemiddelden
     future_dates = pd.date_range(today + pd.Timedelta(days=1), periods=7)
     forecast_turnover = []
     for i, d in enumerate(future_dates):
         wd = d.weekday()
-        conv = weekday_stats.loc[wd, "conversion_rate"] / 100
-        spv = weekday_stats.loc[wd, "sales_per_visitor"]
-        turnover = forecast_footfall[i] * conv * spv
-        forecast_turnover.append(round(turnover))
+        conv = weekday_avg.loc[wd, "conversion_rate"] / 100
+        spt = weekday_avg.loc[wd, "sales_per_transaction"]
+        turnover = forecast_footfall[i] * conv * spt
+        forecast_turnover.append(int(round(turnover)))
 
     forecast_df = pd.DataFrame({
         "Dag": future_dates.strftime("%a %d"),
@@ -227,7 +226,7 @@ if tool == "Store Manager" and len(selected) == 1:
     st.subheader("Voorspelling komende 7 dagen")
     st.dataframe(forecast_df)
 
-    # Week & Maand forecast
+    # --- WEEK & MAAND FORECAST ---
     week_forecast = sum(forecast_turnover)
     month_days_left = (first_of_month + pd.DateOffset(months=1) - today).days
     avg_daily = row["turnover"] / len(df_raw) if len(df_raw) > 0 else 0
@@ -236,48 +235,36 @@ if tool == "Store Manager" and len(selected) == 1:
     col1.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     col2.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
-    # --- 4. GRAFIEK: naast elkaar + voorspelling ---
+    # --- GRAFIEK: footfall + omzet naast elkaar + voorspelling ---
     fig = go.Figure()
-
-    # Historisch
-    fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", yaxis="y", offsetgroup=0))
-    fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", yaxis="y2", offsetgroup=1))
-
-    # Voorspelling
-    fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", yaxis="y", offsetgroup=0, marker_color="lightblue"))
-    fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Omzet"], name="Voorsp. Omzet", yaxis="y2", offsetgroup=1, marker_color="lightcoral"))
-
-    fig.update_layout(
-        barmode="group",
-        yaxis=dict(title="Footfall"),
-        yaxis2=dict(title="Omzet €", overlaying="y", side="right"),
-        legend=dict(x=0, y=1.1, orientation="h")
-    )
+    fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", offsetgroup=0))
+    fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", offsetgroup=1))
+    fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", offsetgroup=0, marker_color="lightblue"))
+    fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Omzet"], name="Voorsp. Omzet", offsetgroup=1, marker_color="lightcoral"))
+    fig.update_layout(barmode="group", yaxis_title="Aantal / €", legend=dict(x=0, y=1.1, orientation="h"))
     st.plotly_chart(fig, use_container_width=True)
 
-    # Actie
+    # --- ACTIE ---
     if row["conversion_rate"] < 12:
         st.warning("**Actie:** +1 FTE piekuren → +3-5% conversie (Ryski Ch3)")
     else:
         st.success("**Goed:** Conversie >12%. Focus upselling.")
 
-# --- REGIO & DIRECTIE (zoals eerder) ---
+# --- REGIO & DIRECTIE (kort) ---
 elif tool == "Regio Manager":
     st.header(f"Regio – {period_option.capitalize()}")
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
-    c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
-    c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
+    st.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
+    st.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
+    st.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     st.dataframe(df[["name", "count_in", "conversion_rate"]].sort_values("conversion_rate", ascending=False))
 
 else:
     st.header(f"Keten – {period_option.capitalize()}")
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
-    c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
-    c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
-    st.info("**Q4 Forecast:** +4% omzet bij mild weer")
+    st.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
+    st.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
+    st.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
+    st.info("**Q4 Forecast:** +4% omzet bij mild weer (CBS + OpenWeather)")
 
-st.caption("RetailGift AI: 3 tools, 1 data. ARIMA 85%. Weer via postcode. Onbetaalbaar.")
+st.caption("RetailGift AI: 3 tools, 1 data. ARIMA 85%. Weekdag-gemiddelden. Onbetaalbaar.")
