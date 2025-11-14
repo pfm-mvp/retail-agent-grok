@@ -88,17 +88,20 @@ if resp.status_code != 200:
     st.stop()
 raw_json = resp.json()
 
-# --- 7. NORMALISEER ---
+# --- 7. NORMALISEER + DATE FIX ---
 df_raw = normalize.normalize_vemcount_response(raw_json)
 if df_raw.empty:
     st.error("Geen data")
     st.stop()
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
-df_raw["date"] = pd.to_datetime(df_raw["date"])
 
-# --- 8. FILTER OP PERIODE (alle periodes) ---
+# CRITICAL: Zet date om naar datetime VOORDAT je filtert
+df_raw["date"] = pd.to_datetime(df_raw["date"], errors='coerce')
+df_raw = df_raw.dropna(subset=["date"])  # Verwijder ongeldige dates
+
+# --- 8. FILTER OP PERIODE (nu 100% correct) ---
 today = pd.Timestamp.today().normalize()
-start_week = today - pd.Timedelta(days=today.weekday())
+start_week = today - pd.Timedelta(days=today.weekday())  # Maandag
 start_last_week = start_week - pd.Timedelta(days=7)
 end_last_week = start_week - pd.Timedelta(days=1)
 first_of_month = today.replace(day=1)
@@ -109,7 +112,7 @@ if period_option == "yesterday":
 elif period_option == "today":
     df_raw = df_raw[df_raw["date"] == today]
 elif period_option == "this_week":
-    df_raw = df_raw[df_raw["date"] >= start_week]
+    df_raw = df_raw[df_raw["date"] >= start_week]  # Inclusief vrijdag!
 elif period_option == "last_week":
     df_raw = df_raw[(df_raw["date"] >= start_last_week) & (df_raw["date"] <= end_last_week)]
 elif period_option == "this_month":
