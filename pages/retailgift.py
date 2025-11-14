@@ -72,7 +72,7 @@ if period_option == "date":
 # --- 6. API CALL (1x) ---
 params = [("period_step", "day"), ("source", "shops")]
 if period_option == "date":
-    params += [("period", "date"), ("form_date_from", form_date_from), ("form_date_to", form_date_to)]
+    params += [("period", "date"), ("form_date_from", form_date_from), ("form_date_to", "form_date_to")]
 else:
     params.append(("period", period_option))
 for sid in shop_ids:
@@ -88,7 +88,7 @@ if resp.status_code != 200:
 raw_json = resp.json()
 
 # --- 7. NORMALISEER ---
-df_raw = normalize.normalize_vemcount_response(raw_json)  # <--- . NOT from
+df_raw = normalize.normalize_vemcount_response(raw_json)  # <--- WERKT MET JOUW normalize.py
 if df_raw.empty:
     st.error("Geen data")
     st.stop()
@@ -128,15 +128,18 @@ if tool == "Store Manager" and len(selected) == 1:
     st.dataframe(daily.style.format({"count_in": "{:,}", "conversion_rate": "{:.1f}%", "turnover": "€{:.0f}"}))
 
     # Voorspelling (ARIMA op historische)
-    hist_footfall = df_raw["count_in"].tolist()
-    if len(hist_footfall) > 0:
-        model = ARIMA(hist_footfall, order=(1,1,1))
-        forecast = model.fit().forecast(7)
-        forecast = [max(0, int(f)) for f in forecast]
-        days = pd.date_range(date.today() + timedelta(1), periods=7).strftime("%a %d")
-        forecast_df = pd.DataFrame({"Dag": days, "Verw. Footfall": forecast})
-        st.subheader("Voorspelling komende 7 dagen")
-        st.dataframe(forecast_df)
+    hist_footfall = df_raw["count_in"].astype(int).tolist()
+    if len(hist_footfall) >= 3:
+        try:
+            model = ARIMA(hist_footfall, order=(1,1,1))
+            forecast = model.fit().forecast(7)
+            forecast = [max(0, int(f)) for f in forecast]
+            days = pd.date_range(date.today() + timedelta(1), periods=7).strftime("%a %d")
+            forecast_df = pd.DataFrame({"Dag": days, "Verw. Footfall": forecast})
+            st.subheader("Voorspelling komende 7 dagen")
+            st.dataframe(forecast_df)
+        except:
+            st.info("Niet genoeg data voor voorspelling")
 
     # AI Actie
     conv = row["conversion_rate"]
