@@ -97,22 +97,31 @@ df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locati
 df_raw["date"] = pd.to_datetime(df_raw["date"], format="%a. %b %d, %Y")
 
 # --- 8. FILTER OP PERIODE ---
+today = date.today()
+df_raw["date"] = pd.to_datetime(df_raw["date"], format="%a. %b %d, %Y")
+
+# Altijd definiëren
+start_week = today - timedelta(days=today.weekday())
+start_last_week = start_week - timedelta(days=7)
+end_last_week = start_week - timedelta(days=1)
+first_of_month = today.replace(day=1)
+last_month = (first_of_month - timedelta(days=1)).replace(day=1)
+
 if period_option == "yesterday":
-    df_raw = df_raw[df_raw["date"] == (date.today() - timedelta(days=1))]
+    df_raw = df_raw[df_raw["date"] == (today - timedelta(days=1))]
 elif period_option == "today":
-    df_raw = df_raw[df_raw["date"] == date.today()]
+    df_raw = df_raw[df_raw["date"] == today]
 elif period_option == "this_week":
-    start_week = date.today() - timedelta(days=date.today().weekday())
     df_raw = df_raw[df_raw["date"] >= start_week]
 elif period_option == "last_week":
-    start_last = date.today() - timedelta(days=date.today().weekday() + 7)
-    end_last = start_last + timedelta(days=6)
-    df_raw = df_raw[(df_raw["date"] >= start_last) & (df_raw["date"] <= end_last)]
+    df_raw = df_raw[(df_raw["date"] >= start_last_week) & (df_raw["date"] <= end_last_week)]
 elif period_option == "this_month":
-    df_raw = df_raw[df_raw["date"].dt.month == date.today().month]
+    df_raw = df_raw[df_raw["date"] >= first_of_month]
 elif period_option == "last_month":
-    last_month = date.today().replace(day=1) - timedelta(days=1)
-    df_raw = df_raw[df_raw["date"].dt.month == last_month.month]
+    next_month = first_of_month + pd.DateOffset(months=1)
+    df_raw = df_raw[(df_raw["date"] >= last_month) & (df_raw["date"] < first_of_month)]
+elif period_option == "date":
+    df_raw = df_raw[(df_raw["date"] >= pd.to_datetime(form_date_from)) & (df_raw["date"] <= pd.to_datetime(form_date_to))]
 
 # --- 9. AGGREGEER ---
 df = df_raw.groupby("shop_id").agg({
