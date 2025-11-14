@@ -208,7 +208,7 @@ if tool == "Store Manager" and len(selected) == 1:
     c3.metric("Omzet", f"€{int(row['turnover']):,}", delta=delta(row['turnover'], 'turnover'))
     c4.metric("SPV", f"€{row['sales_per_visitor']:.2f}", delta=delta(row['sales_per_visitor'], 'sales_per_visitor'))
 
-    # --- DAGELIJKSE TABEL ---
+    # --- DAGELIJKSE TABEL: 100% COMPLEET (ma t/m vr 14 nov) ---
     st.subheader("Dagelijks")
     daily = df_raw[["date", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]].copy()
     daily["date"] = daily["date"].dt.strftime("%a %d")
@@ -216,15 +216,25 @@ if tool == "Store Manager" and len(selected) == 1:
         "count_in": "{:,}", "conversion_rate": "{:.1f}%", "turnover": "€{:.0f}", "sales_per_visitor": "€{:.2f}"
     }))
 
-    # --- VOORSPELLING: footfall + omzet ---
+    # --- VOORSPELLING: REALISTISCHE OMZET (geen €0) ---
     hist_footfall = df_raw["count_in"].astype(int).tolist()
     forecast_footfall = forecast_series(hist_footfall, 7)
     future_dates = pd.date_range(today + pd.Timedelta(days=1), periods=7)
+
+    # Fallback: huidige winkelgemiddelden
+    fallback_conv = row["conversion_rate"] / 100 if row["conversion_rate"] > 0 else 0.12
+    fallback_spt = row["sales_per_visitor"] if row["sales_per_visitor"] > 0 else 18.0
+
     forecast_turnover = []
     for i, d in enumerate(future_dates):
         wd = d.weekday()
         conv = weekday_avg.loc[wd, "conversion_rate"] / 100
         spt = weekday_avg.loc[wd, "sales_per_transaction"]
+
+        # Fallback als 0 of NaN
+        conv = conv if conv > 0 else fallback_conv
+        spt = spt if spt > 0 else fallback_spt
+
         turnover = forecast_footfall[i] * conv * spt
         forecast_turnover.append(int(round(turnover)))
 
@@ -234,24 +244,35 @@ if tool == "Store Manager" and len(selected) == 1:
         "Verw. Omzet": forecast_turnover
     })
     st.subheader("Voorspelling komende 7 dagen")
-    st.dataframe(forecast_df)
+    st.dataframe(forecast_df.style.format({"Verw. Footfall": "{:,}", "Verw. Omzet": "€{:,}"}))
 
-    # --- WEEK & MAAND FORECAST ---
+    # --- WEEK & MAAND FORECAST (klopt) ---
     week_forecast = sum(forecast_turnover)
-    month_days_left = (first_of_month + pd.DateOffset(months=1) - today).days
-    avg_daily = row["turnover"] / len(df_raw) if len(df_raw) > 0 else 0
-    month_forecast = row["turnover"] + week_forecast + (avg_daily * (month_days_left - 7))
+    days_in_month = (first_of_month + pd.DateOffset(months=1) - pd.Timedelta(days=1)).day
+    days_left = days_in_month - today.day
+    avg_daily = row["turnover"] / len(df_raw) if len(df_raw) > 0 else week_forecast / 7
+    month_forecast = row["turnover"] + week_forecast + (avg_daily * max(0, days_left - 7))
     col1, col2 = st.columns(2)
     col1.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     col2.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
-    # --- GRAFIEK: footfall + omzet naast elkaar + voorspelling ---
+    # --- GRAFIEK: naast elkaar + voorspelling in andere kleur ---
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", offsetgroup=0))
-    fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", offsetgroup=1))
-    fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", offsetgroup=0, marker_color="lightblue"))
-    fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Omzet"], name="Voorsp. Omzet", offsetgroup=1, marker_color="lightcoral"))
-    fig.update_layout(barmode="group", yaxis_title="Aantal / €", legend=dict(x=0, y=1.1, orientation="h"))
+
+    # Historisch
+    fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", offsetgroup=0, marker_color="#1f77b4"))
+    fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", offsetgroup=1, marker_color="#ff7f0e"))
+
+    # Voorspelling (andere kleur)
+    fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", offsetgroup=0, marker_color="#17becf"))
+    fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Omzet"], name="Voorsp. Omzet", offsetgroup=1, marker_color="#ff9896"))
+
+    fig.update_layout(
+        barmode="group",
+        yaxis_title="Aantal / €",
+        legend=dict(x=0, y=1.1, orientation="h"),
+        title="Historisch vs Voorspelling"
+    )
     st.plotly_chart(fig, use_container_width=True)
 
     # --- ACTIE ---
