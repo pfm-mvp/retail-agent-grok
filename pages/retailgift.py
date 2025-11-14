@@ -141,14 +141,23 @@ resp_hist = requests.get(url_hist)
 if resp_hist.status_code == 200:
     raw_hist = resp_hist.json()
     df_hist = normalize.normalize_vemcount_response(raw_hist)
-    df_hist["date"] = pd.to_datetime(df_hist["date"])
-    df_hist["weekday"] = df_hist["date"].dt.weekday
-    weekday_avg = df_hist.groupby("weekday").agg({
-        "conversion_rate": "mean",
-        "sales_per_transaction": "mean"
-    }).reindex(range(7), fill_value=0)
+    if df_hist.empty:
+        df_hist = pd.DataFrame(columns=["conversion_rate", "sales_per_transaction"])
 else:
-    weekday_avg = pd.DataFrame({"conversion_rate": [0]*7, "sales_per_transaction": [0]*7}, index=range(7))
+    df_hist = pd.DataFrame(columns=["conversion_rate", "sales_per_transaction"])
+
+# Zorg voor kolommen + vul met 0 als ontbreekt
+for col in ["conversion_rate", "sales_per_transaction"]:
+    if col not in df_hist.columns:
+        df_hist[col] = 0.0
+
+df_hist["date"] = pd.to_datetime(df_hist["date"])
+df_hist["weekday"] = df_hist["date"].dt.weekday
+
+weekday_avg = df_hist.groupby("weekday").agg({
+    "conversion_rate": "mean",
+    "sales_per_transaction": "mean"
+}).reindex(range(7), fill_value=0)
 
 # --- 11. VOORSPELLING FUNCTIE ---
 def forecast_series(series, steps=7):
