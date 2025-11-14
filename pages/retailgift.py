@@ -169,8 +169,7 @@ if tool == "Store Manager" and len(selected) == 1:
 
     # Week & Maand forecast
     week_forecast = sum(forecast_turnover)
-    month_days_left = (pd.Timestamp(date.today().replace(day=1) + pd.DateOffset(months=1) - pd.Timestamp(date.today())).days
-    month_forecast = row["turnover"] + week_forecast + (row["turnover"]/7 * (month_days_left - 7))
+    month_days_left = (pd.Timestamp(date.today().replace(day=1)) + pd.DateOffset(months=1) - pd.Timestamp(date.today())).days    month_forecast = row["turnover"] + week_forecast + (row["turnover"]/7 * (month_days_left - 7))
     st.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     st.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
