@@ -15,9 +15,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 helpers_path = os.path.join(current_dir, "..", "helpers")
 if helpers_path not in sys.path:
     sys.path.append(helpers_path)
+
 import normalize
 importlib.reload(normalize)
-from normalize import normalize_vemcount_response
+normalize_vemcount_response = normalize.normalize_vemcount_response  # <--- . NOT from
 
 # --- 2. UI FALLBACK ---
 try:
