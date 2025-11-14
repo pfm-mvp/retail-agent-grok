@@ -73,7 +73,7 @@ if period_option == "date":
 # --- 6. API CALL (huidige periode) ---
 params = [("period_step", "day"), ("source", "shops")]
 if period_option == "date":
-    params += [("period", "date"), ("form_date_from", form_date_from), ("form_date_to", form_date_to")]
+    params += [("period", "date"), ("form_date_from", form_date_from), ("form_date_to", form_date_to)]
 else:
     params.append(("period", period_option))
 for sid in shop_ids:
