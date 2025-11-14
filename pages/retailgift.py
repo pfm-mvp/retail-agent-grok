@@ -1,4 +1,4 @@
-# pages/retailgift.py – FINAL & 100% WERKENDE
+# pages/retailgift.py – 3 NIVEAUS + VOORSPELLING + GRAFIEKEN + WEEKDAG-GEMIDDELDEN
 import streamlit as st
 import requests
 import pandas as pd
@@ -146,7 +146,7 @@ if resp_hist.status_code == 200:
 else:
     df_hist = pd.DataFrame(columns=["conversion_rate", "sales_per_transaction"])
 
-# Zorg voor kolommen
+# Kolommen veilig
 for col in ["conversion_rate", "sales_per_transaction"]:
     if col not in df_hist.columns:
         df_hist[col] = 0.0
@@ -173,7 +173,7 @@ if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
 
-    # --- VORIGE PERIODE VOOR % VERSCHIL ---
+    # --- VORIGE PERIODE ---
     def get_prev_agg(period):
         if period == "this_week":
             prev_start = start_week - pd.Timedelta(days=7)
@@ -207,7 +207,7 @@ if tool == "Store Manager" and len(selected) == 1:
     c3.metric("Omzet", f"€{int(row['turnover']):,}", delta=delta(row['turnover'], 'turnover'))
     c4.metric("SPV", f"€{row['sales_per_visitor']:.2f}", delta=delta(row['sales_per_visitor'], 'sales_per_visitor'))
 
-    # --- DAGELIJKSE TABEL: 100% COMPLEET ---
+    # --- DAGELIJKSE TABEL ---
     st.subheader("Dagelijks")
     daily = df_raw[["date", "count_in", "conversion_rate", "turnover", "sales_per_visitor"]].copy()
     daily["date"] = daily["date"].dt.strftime("%a %d")
@@ -255,7 +255,7 @@ if tool == "Store Manager" and len(selected) == 1:
     col1.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     col2.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
-    # --- GRAFIEK: NAAST ELKAAR + VOORSPELLING ---
+    # --- GRAFIEK: NAAS T ELKAAR + VOORSPELLING ---
     fig = go.Figure()
     fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", offsetgroup=0, marker_color="#1f77b4"))
     fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", offsetgroup=1, marker_color="#ff7f0e"))
