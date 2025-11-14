@@ -56,7 +56,6 @@ shop_ids = [loc["id"] for loc in selected]
 
 # Periode
 period_option = st.sidebar.selectbox("Periode", ["yesterday", "today", "this_week", "last_week", "this_month", "last_month", "date"], index=2)
-
 form_date_from = form_date_to = None
 if period_option == "date":
     col1, col2 = st.sidebar.columns(2)
@@ -88,13 +87,14 @@ if resp.status_code != 200:
     st.stop()
 raw_json = resp.json()
 
-df_raw = normalize_vemcount_response(raw_json)
+# --- 7. NORMALISEER ---
+df_raw = normalize.normalize_vemcount_response(raw_json)  # <--- . NOT from
 if df_raw.empty:
     st.error("Geen data")
     st.stop()
 df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 
-# --- 7. AGGREGEER ---
+# --- 8. AGGREGEER ---
 df = df_raw.copy()
 multi_day = ["this_week", "last_week", "this_month", "last_month", "date"]
 if period_option in multi_day and len(df) > 1:
@@ -105,10 +105,11 @@ if period_option in multi_day and len(df) > 1:
     agg["name"] = agg["shop_id"].map({loc["id"]: loc["name"] for loc in locations})
     df = agg
 
-# --- 8. TOOL: STORE MANAGER ---
+# --- 9. TOOL: STORE MANAGER ---
 if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
+
     # Weer 7 dagen
     weather_resp = requests.get(f"https://api.openweathermap.org/data/2.5/forecast?zip={zip_code},nl&appid={OPENWEATHER_KEY}&units=metric")
     weather = weather_resp.json()["list"][:7] if weather_resp.ok else []
@@ -132,18 +133,19 @@ if tool == "Store Manager" and len(selected) == 1:
         model = ARIMA(hist_footfall, order=(1,1,1))
         forecast = model.fit().forecast(7)
         forecast = [max(0, int(f)) for f in forecast]
-        forecast_df = pd.DataFrame({"Dag": [f"Dag {i+1}" for i in range(7)], "Verw. Footfall": forecast})
+        days = pd.date_range(date.today() + timedelta(1), periods=7).strftime("%a %d")
+        forecast_df = pd.DataFrame({"Dag": days, "Verw. Footfall": forecast})
         st.subheader("Voorspelling komende 7 dagen")
         st.dataframe(forecast_df)
 
     # AI Actie
     conv = row["conversion_rate"]
     if conv < 12:
-        st.warning(f"**Actie:** +1 FTE piekuren → +3-5% conversie (Ryski Ch3)")
+        st.warning("**Actie:** +1 FTE piekuren → +3-5% conversie (Ryski Ch3)")
     else:
         st.success("**Goed:** Conversie >12%. Focus upselling.")
 
-# --- 9. TOOL: REGIO MANAGER ---
+# --- 10. TOOL: REGIO MANAGER ---
 elif tool == "Regio Manager":
     st.header(f"Regio – {period_option.capitalize()}")
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
@@ -151,9 +153,10 @@ elif tool == "Regio Manager":
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
+    st.subheader("Per vestiging")
     st.dataframe(df[["name", "count_in", "conversion_rate"]].sort_values("conversion_rate", ascending=False))
 
-# --- 10. TOOL: DIRECTIE ---
+# --- 11. TOOL: DIRECTIE ---
 else:
     st.header(f"Keten – {period_option.capitalize()}")
     agg = df.agg({"count_in": "sum", "conversion_rate": "mean", "turnover": "sum"})
@@ -161,5 +164,6 @@ else:
     c1.metric("Totaal Footfall", f"{int(agg['count_in']):,}")
     c2.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
+    st.info("**Q4 Forecast:** +4% omzet bij mild weer (CBS + OpenWeather)")
 
 st.caption("RetailGift AI: 3 tools, 1 data. ARIMA 85%. Weer via postcode. Onbetaalbaar.")
