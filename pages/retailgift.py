@@ -102,7 +102,6 @@ df_raw = df_raw.dropna(subset=["date"])  # Verwijder ongeldige dates
 # --- 8. FILTER OP PERIODE ---
 today = pd.Timestamp.today().normalize()
 start_week = today - pd.Timedelta(days=today.weekday())  # Maandag
-end_week = today  # <--- Eind = vandaag (inclusief vrijdag)
 start_last_week = start_week - pd.Timedelta(days=7)
 end_last_week = start_week - pd.Timedelta(days=1)
 first_of_month = today.replace(day=1)
