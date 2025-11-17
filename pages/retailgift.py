@@ -174,6 +174,10 @@ def forecast_series(series, steps=7):
 
 # --- 12. TOOL: STORE MANAGER ---
 if tool == "Store Manager" and len(selected) == 1:
+    if df.empty:
+        st.error("Geen data beschikbaar voor deze winkel en periode.")
+        st.stop()
+
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
 
@@ -224,7 +228,6 @@ if tool == "Store Manager" and len(selected) == 1:
     forecast_footfall = forecast_series(hist_footfall, 7)
     future_dates = pd.date_range(today + pd.Timedelta(days=1), periods=7)
 
-    # Fallback: huidige winkelgemiddelden
     fallback_conv = row["conversion_rate"] / 100 if row["conversion_rate"] > 0 else 0.12
     fallback_spt = row["sales_per_visitor"] if row["sales_per_visitor"] > 0 else 18.0
 
@@ -233,11 +236,8 @@ if tool == "Store Manager" and len(selected) == 1:
         wd = d.weekday()
         conv = weekday_avg.loc[wd, "conversion_rate"] / 100
         spt = weekday_avg.loc[wd, "sales_per_transaction"]
-
-        # Fallback als 0 of NaN
         conv = conv if conv > 0 else fallback_conv
         spt = spt if spt > 0 else fallback_spt
-
         turnover = forecast_footfall[i] * conv * spt
         forecast_turnover.append(int(round(turnover)))
 
@@ -259,7 +259,7 @@ if tool == "Store Manager" and len(selected) == 1:
     col1.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     col2.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
-    # --- GRAFIEK: NAAS T ELKAAR + VOORSPELLING ---
+    # --- GRAFIEK ---
     fig = go.Figure()
     fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", offsetgroup=0, marker_color="#1f77b4"))
     fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", offsetgroup=1, marker_color="#ff7f0e"))
