@@ -70,12 +70,12 @@ if period_option == "date":
     form_date_from = start.strftime("%Y-%m-%d")
     form_date_to = end.strftime("%Y-%m-%d")
 
-# --- 6. API CALL (1x) ---
-params = [("period_step", "day"), ("source", "shops")]
-if period_option == "date":
-    params += [("period", "date"), ("form_date_from", form_date_from), ("form_date_to", form_date_to)]
-else:
-    params.append(("period", period_option))
+# --- 6. API CALL – VRAAG ALTIJD "this_year" VOOR VOLLEDIGE DATA ---
+params = [
+    ("period", "this_year"),           # ← ALTIJD ALLE DATA
+    ("period_step", "day"),
+    ("source", "shops")
+]
 for sid in shop_ids:
     params.append(("data[]", sid))
 for output in ["count_in", "conversion_rate", "turnover", "sales_per_visitor"]:
@@ -99,12 +99,12 @@ df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locati
 df_raw["date"] = pd.to_datetime(df_raw["date"], errors='coerce')
 df_raw = df_raw.dropna(subset=["date"])  # Verwijder ongeldige dates
 
-# --- 8. FILTER OP PERIODE – 100% CORRECTE WEKEN & MAANDEN ---
+# --- 8. FILTER OP PERIODE – NU OP VOLLEDIGE DATASET ---
 today = pd.Timestamp.today().normalize()
-start_week = today - pd.Timedelta(days=today.weekday())                  # Maandag deze week
-end_week = start_week + pd.Timedelta(days=6)                             # Zondag deze week
-start_last_week = start_week - pd.Timedelta(days=7)                      # Maandag vorige week
-end_last_week = end_week - pd.Timedelta(days=7)                          # Zondag vorige week (16 nov)
+start_week = today - pd.Timedelta(days=today.weekday())                    # ma 17 nov
+end_week = start_week + pd.Timedelta(days=6)                               # zo 23 nov
+start_last_week = start_week - pd.Timedelta(days=7)                        # ma 10 nov
+end_last_week = end_week - pd.Timedelta(days=7)                            # zo 16 nov
 first_of_month = today.replace(day=1)
 last_of_this_month = (first_of_month + pd.DateOffset(months=1) - pd.Timedelta(days=1))
 first_of_last_month = first_of_month - pd.DateOffset(months=1)
