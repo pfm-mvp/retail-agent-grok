@@ -181,37 +181,39 @@ if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
 
-    # --- VORIGE PERIODE – NU 100% CORRECT & NOOIT MEER N/A ---
+    # --- VORIGE PERIODE ---
     def get_prev_agg(period):
         if period == "this_week":
-            prev_start = start_last_week
-            prev_end   = end_last_week
+            prev_start = start_week - pd.Timedelta(days=7)
+            prev_end = start_week - pd.Timedelta(days=1)
         elif period == "last_week":
             prev_start = start_last_week - pd.Timedelta(days=7)
-            prev_end   = end_last_week - pd.Timedelta(days=7)
+            prev_end = start_last_week - pd.Timedelta(days=1)
         elif period == "this_month":
-            prev_start = first_of_last_month
-            prev_end   = first_of_month - pd.Timedelta(days=1)
+            prev_start = first_of_month - pd.DateOffset(months=1)
+            prev_end = first_of_month - pd.Timedelta(days=1)
         elif period == "last_month":
-            prev_start = first_of_last_month - pd.DateOffset(months=1)
-            prev_end   = first_of_last_month - pd.Timedelta(days=1)
-        elif period == "date":
-            # Bij vrije datumreeks → exact dezelfde lengte ervoor
-            length = (end - start).days + 1
-            prev_start = start - pd.Timedelta(days=length)
-            prev_end   = start - pd.Timedelta(days=1)
+            prev_start = last_month - pd.DateOffset(months=1)
+            prev_end = last_month - pd.Timedelta(days=1)
         else:
             return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-
         prev = df_raw[(df_raw["date"] >= prev_start) & (df_raw["date"] <= prev_end)]
-        if prev.empty:
-            return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-        return prev.agg({
-            "count_in": "sum",
-            "turnover": "sum",
-            "conversion_rate": "mean",
-            "sales_per_visitor": "mean"
-        })
+        return prev.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"}) if not prev.empty else pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
+
+    prev_agg = get_prev_agg(period_option)
+
+    def delta(val, prev_key):
+        prev = prev_agg.get(prev_key, 0)
+        if prev == 0: return "N/A"
+        pct = (val - prev) / prev * 100
+        return f"{pct:+.1f}%" if pct != 0 else "0%"
+
+    st.header(f"{row['name']} – {period_option.capitalize()}")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Footfall", f"{int(row['count_in']):,}", delta=delta(row['count_in'], 'count_in'))
+    c2.metric("Conversie", f"{row['conversion_rate']:.1f}%", delta=delta(row['conversion_rate'], 'conversion_rate'))
+    c3.metric("Omzet", f"€{int(row['turnover']):,}", delta=delta(row['turnover'], 'turnover'))
+    c4.metric("SPV", f"€{row['sales_per_visitor']:.2f}", delta=delta(row['sales_per_visitor'], 'sales_per_visitor'))
 
     # --- DAGELIJKSE TABEL ---
     st.subheader("Dagelijks")
