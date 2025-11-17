@@ -99,27 +99,28 @@ df_raw["name"] = df_raw["shop_id"].map({loc["id"]: loc["name"] for loc in locati
 df_raw["date"] = pd.to_datetime(df_raw["date"], errors='coerce')
 df_raw = df_raw.dropna(subset=["date"])  # Verwijder ongeldige dates
 
-# --- 8. FILTER OP PERIODE ---
+# --- 8. FILTER OP PERIODE – 100% CORRECTE WEKEN & MAANDEN ---
 today = pd.Timestamp.today().normalize()
-start_week = today - pd.Timedelta(days=today.weekday())  # Maandag
-start_last_week = start_week - pd.Timedelta(days=7)
-end_last_week = start_week - pd.Timedelta(days=1)
+start_week = today - pd.Timedelta(days=today.weekday())                  # Maandag deze week
+end_week = start_week + pd.Timedelta(days=6)                             # Zondag deze week
+start_last_week = start_week - pd.Timedelta(days=7)                      # Maandag vorige week
+end_last_week = end_week - pd.Timedelta(days=7)                          # Zondag vorige week (16 nov)
 first_of_month = today.replace(day=1)
-last_month = (first_of_month - pd.Timedelta(days=1)).replace(day=1)
+last_of_this_month = (first_of_month + pd.DateOffset(months=1) - pd.Timedelta(days=1))
+first_of_last_month = first_of_month - pd.DateOffset(months=1)
 
 if period_option == "yesterday":
     df_raw = df_raw[df_raw["date"] == (today - pd.Timedelta(days=1))]
 elif period_option == "today":
     df_raw = df_raw[df_raw["date"] == today]
 elif period_option == "this_week":
-    df_raw = df_raw[(df_raw["date"] >= start_week) & (df_raw["date"] <= end_week)]  # Inclusief vrijdag!
+    df_raw = df_raw[(df_raw["date"] >= start_week) & (df_raw["date"] <= end_week)]
 elif period_option == "last_week":
     df_raw = df_raw[(df_raw["date"] >= start_last_week) & (df_raw["date"] <= end_last_week)]
 elif period_option == "this_month":
-    df_raw = df_raw[df_raw["date"] >= first_of_month]
+    df_raw = df_raw[(df_raw["date"] >= first_of_month) & (df_raw["date"] <= last_of_this_month)]
 elif period_option == "last_month":
-    next_month = first_of_month + pd.DateOffset(months=1)
-    df_raw = df_raw[(df_raw["date"] >= last_month) & (df_raw["date"] < next_month)]
+    df_raw = df_raw[(df_raw["date"] >= first_of_last_month) & (df_raw["date"] < first_of_month)]
 elif period_option == "date":
     start = pd.to_datetime(form_date_from)
     end = pd.to_datetime(form_date_to)
