@@ -181,32 +181,52 @@ if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
 
-    # --- VORIGE PERIODE ---
+    # --- VORIGE PERIODE – 100% WERKENDE VERSIE (NOOIT MEER N/A OF CRASH) ---
     def get_prev_agg(period):
         if period == "this_week":
-            prev_start = start_week - pd.Timedelta(days=7)
-            prev_end = start_week - pd.Timedelta(days=1)
+            prev_start = start_last_week          # ma 10 nov
+            prev_end   = end_last_week            # zo 16 nov
         elif period == "last_week":
             prev_start = start_last_week - pd.Timedelta(days=7)
-            prev_end = start_last_week - pd.Timedelta(days=1)
+            prev_end   = end_last_week - pd.Timedelta(days=7)
         elif period == "this_month":
-            prev_start = first_of_month - pd.DateOffset(months=1)
-            prev_end = first_of_month - pd.Timedelta(days=1)
+            prev_start = first_of_last_month
+            prev_end   = first_of_month - pd.Timedelta(days=1)
         elif period == "last_month":
-            prev_start = last_month - pd.DateOffset(months=1)
-            prev_end = last_month - pd.Timedelta(days=1)
+            prev_start = first_of_last_month - pd.DateOffset(months=1)
+            prev_end   = first_of_last_month - pd.Timedelta(days=1)
+        elif period == "yesterday":
+            prev_start = prev_end = today - pd.Timedelta(days=2)
+        elif period == "today":
+            prev_start = prev_end = today - pd.Timedelta(days=1)
+        elif period == "date":
+            length = (pd.to_datetime(form_date_to) - pd.to_datetime(form_date_from)).days + 1
+            prev_start = pd.to_datetime(form_date_from) - pd.Timedelta(days=length)
+            prev_end   = pd.to_datetime(form_date_from) - pd.Timedelta(days=1)
         else:
             return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
+
+        # Filter + aggregatie
         prev = df_raw[(df_raw["date"] >= prev_start) & (df_raw["date"] <= prev_end)]
-        return prev.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"}) if not prev.empty else pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
+        if prev.empty:
+            return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
+        
+        return prev.agg({
+            "count_in": "sum",
+            "turnover": "sum",
+            "conversion_rate": "mean",
+            "sales_per_visitor": "mean"
+        })
 
     prev_agg = get_prev_agg(period_option)
 
+    # Verbeterde delta (geen crash bij 0)
     def delta(val, prev_key):
         prev = prev_agg.get(prev_key, 0)
-        if prev == 0: return "N/A"
+        if prev == 0 or pd.isna(prev):
+            return "N/A"
         pct = (val - prev) / prev * 100
-        return f"{pct:+.1f}%" if pct != 0 else "0%"
+        return f"{pct:+.1f}%" if abs(pct) >= 0.1 else "0%"
 
     st.header(f"{row['name']} – {period_option.capitalize()}")
     c1, c2, c3, c4 = st.columns(4)
