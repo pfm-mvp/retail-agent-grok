@@ -225,7 +225,6 @@ if tool == "Store Manager" and len(selected) == 1:
     footfall_delta = calc_delta(row["count_in"], "count_in")
     conv_delta     = calc_delta(row["conversion_rate"], "conversion_rate")
     omzet_delta    = calc_delta(row["turnover"], "turnover")
-    ")
     spv_delta      = calc_delta(row["sales_per_visitor"], "sales_per_visitor")
 
     # KPI's met correcte delta (geen fout meer!)
