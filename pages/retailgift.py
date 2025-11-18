@@ -143,11 +143,23 @@ if prev_start and prev_end:
 else:
     prev_agg = pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
 
-# --- 11. AGGREGEER HUIDIGE PERIODE ---
-df = df_raw.groupby("shop_id").agg({
-    "count_in": "sum", "turnover": "sum",
-    "conversion_rate": "mean", "sales_per_visitor": "mean"
+# --- 11. AGGREGEER HUIDIGE PERIODE – NU ECHT CORRECT ---
+# Sommige API’s geven dubbele regels → we nemen de MAX omzet per dag
+daily_correct = df_raw.groupby(["shop_id", "date"])["turnover"].max().reset_index()
+current_period_correct = daily_correct[daily_correct["date"].between(df_raw["date"].min(), df_raw["date"].max())]
+
+df = current_period_correct.groupby("shop_id").agg({
+    "turnover": "sum"
 }).reset_index()
+
+# Voeg footfall, conversie en SPV toe (die zijn wel goed)
+temp = df_raw.groupby("shop_id").agg({
+    "count_in": "sum",
+    "conversion_rate": "mean",
+    "sales_per_visitor": "mean"
+}).reset_index()
+
+df = df.merge(temp, on="shop_id", how="left")
 df["name"] = df["shop_id"].map({loc["id"]: loc["name"] for loc in locations})
 
 # --- 12. WEEKDAG-GEMIDDELDEN (VEILIG GEMAAKT) ---
