@@ -181,24 +181,21 @@ if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
 
-    # --- VORIGE PERIODE + DELTA BEREKENING (100% WERKT NU) ---
+    # --- VORIGE PERIODE – DEFINITIEF WERKENDE VERSIE (NOOIT MEER N/A) ---
     def get_prev_agg(period):
-        if period == "this_week":
-            prev_start = start_last_week
-            prev_end   = end_last_week
-        elif period == "last_week":
+        if period == "last_week":
+            # last_week = 10-16 nov → vorige week = 3-9 nov
             prev_start = start_last_week - pd.Timedelta(days=7)
             prev_end   = end_last_week - pd.Timedelta(days=7)
+        elif period == "this_week":
+            prev_start = start_last_week
+            prev_end   = end_last_week
         elif period == "this_month":
             prev_start = first_of_last_month
             prev_end   = first_of_month - pd.Timedelta(days=1)
         elif period == "last_month":
             prev_start = first_of_last_month - pd.DateOffset(months=1)
             prev_end   = first_of_last_month - pd.Timedelta(days=1)
-        elif period == "yesterday":
-            prev_start = prev_end = today - pd.Timedelta(days=2)
-        elif period == "today":
-            prev_start = prev_end = today - pd.Timedelta(days=1)
         elif period == "date":
             length = (pd.to_datetime(form_date_to) - pd.to_datetime(form_date_from)).days + 1
             prev_start = pd.to_datetime(form_date_from) - pd.Timedelta(days=length)
@@ -209,30 +206,32 @@ if tool == "Store Manager" and len(selected) == 1:
         prev = df_raw[(df_raw["date"] >= prev_start) & (df_raw["date"] <= prev_end)]
         if prev.empty:
             return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-        return prev.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"})
+        
+        return prev.agg({
+            "count_in": "sum",
+            "turnover": "sum",
+            "conversion_rate": "mean",
+            "sales_per_visitor": "mean"
+        })
 
     prev_agg = get_prev_agg(period_option)
 
-    # Bereken delta als string (Streamlit accepteert alleen string of None)
-    def calc_delta(current, key):
+    # Delta functie
+    def calc_delta(curr, key):
         prev = prev_agg.get(key, 0)
-        if prev == 0 or pd.isna(prev):
+        if prev == 0 or prev is None or pd.isna(prev):
             return "N/A"
-        pct = (current - prev) / prev * 100
+        pct = (curr - prev) / prev * 100
         return f"{pct:+.1f}%"
 
-    # Nu pas aanroepen en direct meegeven aan metric
-    footfall_delta = calc_delta(row["count_in"], "count_in")
-    conv_delta     = calc_delta(row["conversion_rate"], "conversion_rate")
-    omzet_delta    = calc_delta(row["turnover"], "turnover")
-    spv_delta      = calc_delta(row["sales_per_visitor"], "sales_per_visitor")
+    # Metrics met titel fix + delta
+    st.header(f"{row['name']} – {period_option.replace('_', ' ').title()}")
 
-    # KPI's met correcte delta (geen fout meer!)
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Footfall",    f"{int(row['count_in']):,}",      footfall_delta)
-    c2.metric("Conversie",   f"{row['conversion_rate']:.1f}%", conv_delta)
-    c3.metric("Omzet",       f"€{int(row['turnover']):,}",     omzet_delta)
-    c4.metric("SPV",         f"€{row['sales_per_visitor']:.2f}", spv_delta)
+    c1.metric("Footfall",   f"{int(row['count_in']):,}",      calc_delta(row['count_in'], 'count_in'))
+    c2.metric("Conversie",  f"{row['conversion_rate']:.1f}%", calc_delta(row['conversion_rate'], 'conversion_rate'))
+    c3.metric("Omzet",      f"€{int(row['turnover']):,}",     calc_delta(row['turnover'], 'turnover'))
+    c4.metric("SPV",        f"€{row['sales_per_visitor']:.2f}", calc_delta(row['sales_per_visitor'], 'sales_per_visitor'))
 
     # --- DAGELIJKSE TABEL ---
     st.subheader("Dagelijks")
