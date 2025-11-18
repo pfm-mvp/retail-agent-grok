@@ -181,52 +181,67 @@ if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
 
-    # --- VORIGE PERIODE – DEFINITIEF WERKENDE VERSIE (NOOIT MEER N/A) ---
-    def get_prev_agg(period):
-        if period == "last_week":
-            # last_week = 10-16 nov → vorige week = 3-9 nov
-            prev_start = start_last_week - pd.Timedelta(days=7)
-            prev_end   = end_last_week - pd.Timedelta(days=7)
-        elif period == "this_week":
-            prev_start = start_last_week
-            prev_end   = end_last_week
-        elif period == "this_month":
-            prev_start = first_of_last_month
-            prev_end   = first_of_month - pd.Timedelta(days=1)
-        elif period == "last_month":
-            prev_start = first_of_last_month - pd.DateOffset(months=1)
-            prev_end   = first_of_last_month - pd.Timedelta(days=1)
-        elif period == "date":
-            length = (pd.to_datetime(form_date_to) - pd.to_datetime(form_date_from)).days + 1
-            prev_start = pd.to_datetime(form_date_from) - pd.Timedelta(days=length)
-            prev_end   = pd.to_datetime(form_date_from) - pd.Timedelta(days=1)
+    # --- VORIGE PERIODE – ULTIEME FIX (WERKT NU ECHT) ---
+    # Bereken altijd de juiste vorige periode op basis van de geselecteerde periode
+    current_start = None
+    current_end = None
+    
+    if period_option == "last_week":
+        current_start = start_last_week
+        current_end = end_last_week
+        prev_start = start_last_week - pd.Timedelta(days=7)
+        prev_end = end_last_week - pd.Timedelta(days=7)
+    elif period_option == "this_week":
+        current_start = start_week
+        current_end = end_week
+        prev_start = start_last_week
+        prev_end = end_last_week
+    elif period_option == "this_month":
+        current_start = first_of_month
+        current_end = last_of_this_month
+        prev_start = first_of_last_month
+        prev_end = first_of_month - pd.Timedelta(days=1)
+    elif period_option == "last_month":
+        current_start = first_of_last_month
+        current_end = first_of_month - pd.Timedelta(days=1)
+        prev_start = first_of_last_month - pd.DateOffset(months=1)
+        prev_end = first_of_last_month - pd.Timedelta(days=1)
+    elif period_option == "date":
+        current_start = pd.to_datetime(form_date_from)
+        current_end = pd.to_datetime(form_date_to)
+        length = (current_end - current_start).days + 1
+        prev_start = current_start - pd.Timedelta(days=length)
+        prev_end = current_start - pd.Timedelta(days=1)
+    else:
+        prev_start = prev_end = None
+
+    # Haal vorige periode op uit df_raw (die heeft alles van this_year)
+    if prev_start and prev_end:
+        prev_data = df_raw[(df_raw["date"] >= prev_start) & (df_raw["date"] <= prev_end)]
+        if not prev_data.empty:
+            prev_agg = prev_data.agg({
+                "count_in": "sum",
+                "turnover": "sum",
+                "conversion_rate": "mean",
+                "sales_per_visitor": "mean"
+            })
         else:
-            return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-
-        prev = df_raw[(df_raw["date"] >= prev_start) & (df_raw["date"] <= prev_end)]
-        if prev.empty:
-            return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-        
-        return prev.agg({
-            "count_in": "sum",
-            "turnover": "sum",
-            "conversion_rate": "mean",
-            "sales_per_visitor": "mean"
-        })
-
-    prev_agg = get_prev_agg(period_option)
+            prev_agg = pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
+    else:
+        prev_agg = pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
 
     # Delta functie
-    def calc_delta(curr, key):
+    def calc_delta(current, key):
         prev = prev_agg.get(key, 0)
         if prev == 0 or prev is None or pd.isna(prev):
             return "N/A"
-        pct = (curr - prev) / prev * 100
+        pct = (current - prev) / prev * 100
         return f"{pct:+.1f}%"
 
-    # Metrics met titel fix + delta
+    # Header met winkelnaam
     st.header(f"{row['name']} – {period_option.replace('_', ' ').title()}")
 
+    # KPI's met delta
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Footfall",   f"{int(row['count_in']):,}",      calc_delta(row['count_in'], 'count_in'))
     c2.metric("Conversie",  f"{row['conversion_rate']:.1f}%", calc_delta(row['conversion_rate'], 'conversion_rate'))
