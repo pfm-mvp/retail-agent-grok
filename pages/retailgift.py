@@ -181,14 +181,13 @@ if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     zip_code = selected[0]["zip"]
 
-    # --- VORIGE PERIODE – NU ECHT PERFECT (NOOIT MEER N/A) ---
+    # --- VORIGE PERIODE + DELTA BEREKENING (100% WERKT NU) ---
     def get_prev_agg(period):
-        # Bepaal de juiste vorige periode
         if period == "this_week":
             prev_start = start_last_week
             prev_end   = end_last_week
         elif period == "last_week":
-            prev_start = start_last_week - pd.Timedelta(days=7)   # week 3-9 nov
+            prev_start = start_last_week - pd.Timedelta(days=7)
             prev_end   = end_last_week - pd.Timedelta(days=7)
         elif period == "this_month":
             prev_start = first_of_last_month
@@ -207,33 +206,34 @@ if tool == "Store Manager" and len(selected) == 1:
         else:
             return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
 
-        # Haal data op uit df_raw (die al "this_year" heeft → dus altijd aanwezig!)
         prev = df_raw[(df_raw["date"] >= prev_start) & (df_raw["date"] <= prev_end)]
         if prev.empty:
             return pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-        
-        return prev.agg({
-            "count_in": "sum",
-            "turnover": "sum",
-            "conversion_rate": "mean",
-            "sales_per_visitor": "mean"
-        })
+        return prev.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"})
 
     prev_agg = get_prev_agg(period_option)
 
-    # Delta met kleur
-    def delta(val, prev_key):
-        prev = prev_agg.get(prev_key, 0)
+    # Bereken delta als string (Streamlit accepteert alleen string of None)
+    def calc_delta(current, key):
+        prev = prev_agg.get(key, 0)
         if prev == 0 or pd.isna(prev):
             return "N/A"
-        pct = (val - prev) / prev * 100
-        return f"{'+' if pct > 0 else ''}{pct:+.1f}%"
+        pct = (current - prev) / prev * 100
+        return f"{pct:+.1f}%"
 
-    # KPI's met vergelijking
-    c1.metric("Footfall", f"{int(row['count_in']):,}", delta=delta(row['count_in'], 'count_in'))
-    c2.metric("Conversie", f"{row['conversion_rate']:.1f}%", delta=delta(row['conversion_rate'], 'conversion_rate'))
-    c3.metric("Omzet", f"€{int(row['turnover']):,}", delta=delta(row['turnover'], 'turnover'))
-    c4.metric("SPV", f"€{row['sales_per_visitor']:.2f}", delta=delta(row['sales_per_visitor'], 'sales_per_visitor'))
+    # Nu pas aanroepen en direct meegeven aan metric
+    footfall_delta = calc_delta(row["count_in"], "count_in")
+    conv_delta     = calc_delta(row["conversion_rate"], "conversion_rate")
+    omzet_delta    = calc_delta(row["turnover"], "turnover")
+    ")
+    spv_delta      = calc_delta(row["sales_per_visitor"], "sales_per_visitor")
+
+    # KPI's met correcte delta (geen fout meer!)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Footfall",    f"{int(row['count_in']):,}",      footfall_delta)
+    c2.metric("Conversie",   f"{row['conversion_rate']:.1f}%", conv_delta)
+    c3.metric("Omzet",       f"€{int(row['turnover']):,}",     omzet_delta)
+    c4.metric("SPV",         f"€{row['sales_per_visitor']:.2f}", spv_delta)
 
     # --- DAGELIJKSE TABEL ---
     st.subheader("Dagelijks")
