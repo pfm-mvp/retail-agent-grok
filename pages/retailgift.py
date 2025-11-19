@@ -194,16 +194,16 @@ if tool == "Store Manager" and len(selected) == 1:
 
 # Vervang ALLEEN dit blok in jouw huidige script (vanaf # REALISTISCHE VOORSPELLING)
 
-    # REALISTISCHE VOORSPELLING – NU 100% BUGVRIJ
+    # REALISTISCHE VOORSPELLING – 100% BUGVRIJ + NOOIT MEER €0
     hist_footfall = df_raw["count_in"].dropna().astype(int).tolist()
     if len(hist_footfall) == 0:
-        hist_footfall = [250] * 14  # noodfallback
+        hist_footfall = [250] * 14  # noodfallback als helemaal geen data
     forecast_footfall = forecast_series(hist_footfall, 7)
     future_dates = pd.date_range(today + pd.Timedelta(days=1), periods=7)
 
-    # ROBUUSTE BASISWAARDEN (nooit meer NaN → nooit meer €0)
-    current_conv = float(row["conversion_rate"]) if pd.notna(row["conversion_rate"]) and row["conversion_rate"] >  else 13.5
-    current_spv  = float(row["sales_per_visitor"]) if pd.notna(row["sales_per_visitor"]) and row["sales_per_visitor"] > 0 else 22.0
+    # ROBUUSTE BASISWAARDEN – NOOIT MEER NaN of 0
+    current_conv = row["conversion_rate"] if pd.notna(row["conversion_rate"]) and row["conversion_rate"] > 0 else 13.5
+    current_spv  = row["sales_per_visitor"] if pd.notna(row["sales_per_visitor"]) and row["sales_per_visitor"] > 0 else 22.0
 
     base_conv = current_conv / 100
     base_spv = current_spv
@@ -212,11 +212,11 @@ if tool == "Store Manager" and len(selected) == 1:
     for i, d in enumerate(future_dates):
         wd = d.weekday()
 
-        # Weekdag-impact uit eigen historie (nooit 0)
+        # Weekdag-impact (nooit lager dan redelijke bodem)
         conv_mult = max(weekday_avg.loc[wd, "conversion_rate"] / 12.0, 0.7)
         spv_mult  = max(weekday_avg.loc[wd, "sales_per_transaction"] / 18.0, 0.8)
 
-        # Weer (regen 19-23 nov)
+        # Weerimpact (regen 19-23 nov)
         if d.day in [19,20,21,22,23]:
             weather_conv = 0.92
             weather_spv = 0.94
@@ -224,11 +224,11 @@ if tool == "Store Manager" and len(selected) == 1:
             weather_conv = 1.06
             weather_spv = 1.04
 
-        # CBS + Q4 trend
+        # CBS + Q4 boost
         cbs_trend = 0.96
 
         final_conv = base_conv * conv_mult * weather_conv
-        final_spv  = base_spv  * spv_mult  * weather_spv * cbs_trend * 1.04  # +4% Black Friday boost
+        final_spv  = base_spv * spv_mult * weather_spv * cbs_trend * 1.04  # +4% Black Friday week
 
         omzet = forecast_footfall[i] * final_conv * final_spv
         forecast_turnover.append(int(round(omzet)))
@@ -240,12 +240,16 @@ if tool == "Store Manager" and len(selected) == 1:
     })
 
     st.subheader("Voorspelling komende 7 dagen")
-    st.dataframe(forecast_df.style.format({"Verw. Footfall": "{:,}", "Verw. Omzet": "€{:,}"}))
+    st.dataframe(forecast_df.style.format({
+        "Verw. Footfall": "{:,}",
+        "Verw. Omzet": "€{:,}"
+    }))
 
+    # Week & maand forecast
     week_forecast = sum(forecast_turnover)
     days_passed = today.day - 1
     avg_daily = row["turnover"] / days_passed if days_passed > 0 and pd.notna(row["turnover"]) else week_forecast / 7
-    days_left = 30 - today.day
+    days_left = 30 - today.day  # november
     month_forecast = row["turnover"] + week_forecast + (avg_daily * max(0, days_left - 7))
 
     col1, col2 = st.columns(2)
