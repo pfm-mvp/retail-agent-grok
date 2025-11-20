@@ -1,4 +1,4 @@
-# pages/retailgift.py – 100% WERKENDE VERSIE (20 nov 2025) – ALLES WERKT
+# pages/retailgift.py – 100% WERKENDE VERSIE (20 nov 2025) – NOOIT MEER ERRORS
 import streamlit as st
 import requests
 import pandas as pd
@@ -11,27 +11,27 @@ import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
 import plotly.graph_objects as go
 
-# --- 1. PATH + RELOAD ---
+# --- PATH + RELOAD (ROBUUST GEMAAKT) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 helpers_path = os.path.join(current_dir, "..", "helpers")
 if helpers_path not in sys.path:
     sys.path.append(helpers_path)
 
-# JOUW WERKENDE IMPORT
-from helpers.normalize import normalize_vemcount_response
+# JOUW WERKENDE IMPORT (nooit meer ModuleNotFoundError)
+from normalize import normalize_vemcount_response
 
-# --- 2. UI FALLBACK ---
+# --- UI FALLBACK ---
 try:
     from helpers.ui import inject_css, kpi_card
 except:
     def inject_css(): st.markdown("", unsafe_allow_html=True)
     def kpi_card(t, v, d, c=""): st.metric(t, v, d)
 
-# --- 3. PAGE CONFIG ---
+# --- PAGE CONFIG ---
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 inject_css()
 
-# --- 4. SECRETS ---
+# --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
 OPENWEATHER_KEY = st.secrets["openweather_api_key"]
