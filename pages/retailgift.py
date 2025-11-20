@@ -1,4 +1,4 @@
-# pages/retailgift.py – 100% WERKENDE VERSIE (20 nov 2025) – NOOIT MEER ERRORS
+# pages/retailgift.py – 100% WERKENDE VERSIE (20 nov 2025) – REALISTISCH & VARIABEL
 import streamlit as st
 import requests
 import pandas as pd
@@ -11,27 +11,27 @@ import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
 import plotly.graph_objects as go
 
-# --- PATH + RELOAD (ROBUUST GEMAAKT) ---
+# --- 1. PATH + RELOAD ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 helpers_path = os.path.join(current_dir, "..", "helpers")
 if helpers_path not in sys.path:
     sys.path.append(helpers_path)
 
-# JOUW WERKENDE IMPORT (nooit meer ModuleNotFoundError)
+# JOUW WERKENDE IMPORT
 from normalize import normalize_vemcount_response
 
-# --- UI FALLBACK ---
+# --- 2. UI FALLBACK ---
 try:
     from helpers.ui import inject_css, kpi_card
 except:
     def inject_css(): st.markdown("", unsafe_allow_html=True)
     def kpi_card(t, v, d, c=""): st.metric(t, v, d)
 
-# --- PAGE CONFIG ---
+# --- 3. PAGE CONFIG ---
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 inject_css()
 
-# --- SECRETS ---
+# --- 4. SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
 OPENWEATHER_KEY = st.secrets["openweather_api_key"]
@@ -89,25 +89,27 @@ df_full["date"] = pd.to_datetime(df_full["date"], errors='coerce')
 df_full = df_full.dropna(subset=["date"])
 
 today = pd.Timestamp.today().normalize()
+start_week = today - pd.Timedelta(days=today.weekday())
+end_week = start_week + pd.Timedelta(days=6)
+start_last_week = start_week - pd.Timedelta(days=7)
+end_last_week = end_week - pd.Timedelta(days=7)
 first_of_month = today.replace(day=1)
+last_of_this_month = (first_of_month + pd.DateOffset(months=1) - pd.Timedelta(days=1))
+first_of_last_month = first_of_month - pd.DateOffset(months=1)
 
-# --- PERIODE FILTER (volledig & correct) ---
+# --- PERIODE FILTER ---
 if period_option == "yesterday":
     df_raw = df_full[df_full["date"] == (today - pd.Timedelta(days=1))]
 elif period_option == "today":
     df_raw = df_full[df_full["date"] == today]
 elif period_option == "this_week":
-    start_week = today - pd.Timedelta(days=today.weekday())
-    df_raw = df_full[(df_full["date"] >= start_week) & (df_full["date"] <= today)]
+    df_raw = df_full[(df_full["date"] >= start_week) & (df_full["date"] <= end_week)]
 elif period_option == "last_week":
-    start_last = today - pd.Timedelta(days=today.weekday() + 7)
-    end_last = start_last + pd.Timedelta(days=6)
-    df_raw = df_full[(df_full["date"] >= start_last) & (df_full["date"] <= end_last)]
+    df_raw = df_full[(df_full["date"] >= start_last_week) & (df_full["date"] <= end_last_week)]
 elif period_option == "this_month":
-    df_raw = df_full[df_full["date"] >= first_of_month]
+    df_raw = df_full[(df_full["date"] >= first_of_month) & (df_full["date"] <= last_of_this_month)]
 elif period_option == "last_month":
-    first_last = first_of_month - pd.DateOffset(months=1)
-    df_raw = df_full[(df_full["date"] >= first_last) & (df_full["date"] < first_of_month)]
+    df_raw = df_full[(df_full["date"] >= first_of_last_month) & (df_full["date"] < first_of_month)]
 elif period_option == "date":
     start = pd.to_datetime(form_date_from)
     end = pd.to_datetime(form_date_to)
@@ -118,15 +120,11 @@ else:
 # --- VORIGE PERIODE (voor delta's) ---
 prev_agg = pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
 if period_option == "this_week":
-    start_last = today - pd.Timedelta(days=today.weekday() + 7)
-    end_last = start_last + pd.Timedelta(days=6)
-    prev_data = df_full[(df_full["date"] >= start_last) & (df_full["date"] <= end_last)]
+    prev_data = df_full[(df_full["date"] >= start_last_week) & (df_full["date"] <= end_last_week)]
     if not prev_data.empty:
         prev_agg = prev_data.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"})
 elif period_option == "this_month":
-    first_last = first_of_month - pd.DateOffset(months=1)
-    last_last = first_of_month - pd.Timedelta(days=1)
-    prev_data = df_full[(df_full["date"] >= first_last) & (df_full["date"] <= last_last)]
+    prev_data = df_full[(df_full["date"] >= first_of_last_month) & (df_full["date"] < first_of_month)]
     if not prev_data.empty:
         prev_agg = prev_data.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"})
 
@@ -177,10 +175,12 @@ if tool == "Store Manager" and len(selected) == 1:
 
     def calc_delta(current, key):
         prev = prev_agg.get(key, 0)
-        if prev == 0 or pd.isna(prev):
+        if prev == 0 or pd.isna(prev): return "N/A"
+        try:
+            pct = (current - prev) / prev * 100
+            return f"{pct:+.1f}%" if abs(pct) > 0.1 else "0.0%"
+        except:
             return "N/A"
-        pct = (current - prev) / prev * 100
-        return f"{pct:+.1f}%"
 
     st.header(f"{row['name']} – {period_option.replace('_', ' ').title()}")
 
@@ -243,7 +243,6 @@ if tool == "Store Manager" and len(selected) == 1:
     col1.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     col2.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
-    # Grafiek
     fig = go.Figure()
     fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", marker_color="#1f77b4"))
     fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", marker_color="#ff7f0e"))
