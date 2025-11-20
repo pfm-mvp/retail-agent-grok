@@ -242,19 +242,80 @@ if tool == "Store Manager" and len(selected) == 1:
     col1.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     col2.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
-    # Grafiek
+# --- WEER OPHALEN VOOR KOMENDE 7 DAGEN ---
+    zip_code = selected[0]["zip"][:4] if selected else "1102"
+    weather_url = f"https://api.openweathermap.org/data/2.5/forecast?zip={zip_code},nl&appid={OPENWEATHER_KEY}&units=metric"
+    weather_resp = requests.get(weather_url)
+    weather_daily = {}
+    if weather_resp.status_code == 200:
+        for item in weather_resp.json()["list"]:
+            dt = pd.to_datetime(item["dt_txt"]).date()
+            if (today + timedelta(days=1)).date() <= dt <= (today + timedelta(days=7)).date():
+                if dt not in weather_daily:
+                    weather_daily[dt] = {"temp": [], "rain": 0}
+                weather_daily[dt]["temp"].append(item["main"]["temp"])
+                if "rain" in item and "3h" in item["rain"]:
+                    weather_daily[dt]["rain"] += item["rain"]["3h"]
+        weather_df = pd.DataFrame([
+            {"Dag": d.strftime("%a %d"), "Temp": np.mean(temps), "Neerslag_mm": rain}
+            for d, data in weather_daily.items()
+            for temps, rain in [(data["temp"], data["rain"])]
+        ])
+    else:
+        weather_df = pd.DataFrame()
+
+    # --- HOURLY TODAY FORECAST (alleen Store Manager) ---
+    hourly_today = []
+    if tool == "Store Manager":
+        base_pattern = [0.01,0.01,0.01,0.02,0.03,0.05,0.07,0.09,0.11,0.12,0.13,0.14,
+                        0.14,0.13,0.12,0.11,0.09,0.07,0.05,0.04,0.03,0.02,0.01,0.01]
+        today_total = int(row["count_in"]) if period_option == "today" and "count_in" in row else int(df_raw["count_in"].sum())
+        today_forecast = today_total if today_total > 0 else int(np.mean(df_raw["count_in"]) * 1.1)
+        hourly_today = [max(1, int(today_forecast * f)) for f in base_pattern]
+
+    # --- HOOFDGRAFIEK MET WEERLIJNEN ---
     fig = go.Figure()
     fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", marker_color="#1f77b4"))
     fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", marker_color="#ff7f0e"))
     fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", marker_color="#17becf"))
     fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Omzet"], name="Voorsp. Omzet", marker_color="#ff9896"))
-    fig.update_layout(barmode="group", yaxis_title="Aantal / €", legend=dict(x=0, y=1.1, orientation="h"))
+
+    if not weather_df.empty:
+        fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Temp"], name="Temp °C", yaxis="y2",
+                                 mode="lines+markers", line=dict(color="orange", width=4, dash="dot")))
+        fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Neerslag_mm"], name="Neerslag mm", yaxis="y3",
+                                 mode="lines+markers", line=dict(color="blue", width=4, dash="dash")))
+
+    fig.update_layout(
+        barmode="group",
+        yaxis=dict(title="Footfall / Omzet €"),
+        yaxis2=dict(title="Temp °C", overlaying="y", side="right", position=0.85, showgrid=False),
+        yaxis3=dict(title="Neerslag mm", overlaying="y", side="right", position=0.93, showgrid=False),
+        legend=dict(x=0, y=1.15, orientation="h"),
+        height=600
+    )
     st.plotly_chart(fig, use_container_width=True, key="main_chart")
 
+    # --- HOURLY TODAY GRAFIEK (alleen Store Manager) ---
+    if tool == "Store Manager" and hourly_today:
+        hours = [f"{h:02d}:00" for h in range(24)]
+        fig2 = go.Figure()
+        fig2.add_trace(go.Bar(x=hours, y=hourly_today, name="Verw. traffic per uur", marker_color="#2ca02c"))
+        fig2.add_trace(go.Scatter(x=hours, y=np.cumsum(hourly_today), name="Cumulatief tot nu", 
+                                  yaxis="y2", line=dict(color="red", width=4)))
+        fig2.update_layout(
+            title="Verwachte traffic vandaag per uur (rood = cumulatief)",
+            yaxis=dict(title="Bezoekers per uur"),
+            yaxis2=dict(title="Totaal tot nu", overlaying="y", side="right"),
+            height=400
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # --- ACTIE ---
     if row["conversion_rate"] < 12:
-        st.warning("**Actie:** +1 FTE piekuren → +3-5% conversie")
+        st.warning("**Actie:** +1 FTE piekuren (11-17u) → +3-5% conversie")
     else:
-        st.success("**Goed:** Conversie >12%. Focus op upselling en bundels.")
+        st.success("**Top:** Conversie >12%. Vandaag piek 12-16u → upselling push!")
 
 # --- REGIO & DIRECTIE (kort) ---
 elif tool == "Regio Manager":
