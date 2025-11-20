@@ -204,7 +204,7 @@ if tool == "Store Manager" and len(selected) == 1:
     forecast_footfall = forecast_series(hist_footfall, 7)
     future_dates = pd.date_range(today + pd.Timedelta(days=1), periods=7)
 
-    base_conv = row<http://row["conversion_rate"] / 100 if pd.notna(row["conversion_rate"]) and row["conversion_rate"] > 0 else 0.128
+    base_conv = row["conversion_rate"] / 100 if pd.notna(row["conversion_rate"]) and row["conversion_rate"] > 0 else 0.128
     base_spv = row["sales_per_visitor"] if pd.notna(row["sales_per_visitor"]) and row["sales_per_visitor"] > 0 else 2.67
 
     forecast_turnover = []
