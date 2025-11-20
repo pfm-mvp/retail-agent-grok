@@ -285,7 +285,7 @@ if tool == "Store Manager" and len(selected) == 1:
         title="Footfall & Omzet + Weerimpact (oranje = temp, blauw = regen)",
         yaxis=dict(title="Footfall / Omzet €"),
         yaxis2=dict(title="Temp °C", overlaying="y", side="right", position=0.85, showgrid=False),
-        yaxis3=dict(title="Neerslag mm", overlaying="y", side="택 right", position=0.93, showgrid=False),
+        yaxis3=dict(title="Neerslag mm", overlaying="y", side="right", position=0.93, showgrid=False),
         legend=dict(x=0, y=1.15, orientation="h"),
         height=650
     )
