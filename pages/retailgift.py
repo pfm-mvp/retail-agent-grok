@@ -239,47 +239,55 @@ if tool == "Store Manager" and len(selected) == 1:
     col1.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     col2.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
-    # WEERLIJNEN OVER HISTORIE + VOORSPELLING
+    # --- WEERLIJNEN OVER VOLLEDIGE PERIODE (HISTORIE + VOORSPELLING) ---
     zip_code = selected[0]["zip"][:4] if selected else "1102"
     weather_url = f"https://api.openweathermap.org/data/2.5/forecast?zip={zip_code},nl&appid={OPENWEATHER_KEY}&units=metric"
     weather_resp = requests.get(weather_url)
     weather_all = {}
+
     if weather_resp.status_code == 200:
         for item in weather_resp.json()["list"]:
             dt = pd.to_datetime(item["dt_txt"]).date()
-            if dt >= (today - timedelta(days=7)).date():
+            # Start 7 dagen vóór eerste zichtbare dag, tot 7 dagen vooruit
+            start_visible = df_raw["date"].min().date() if not df_raw.empty else today.date()
+            if dt >= (start_visible - timedelta(days=7)) and dt <= (today + timedelta(days=7)).date():
                 if dt not in weather_all:
                     weather_all[dt] = {"temp": [], "rain": 0}
                 weather_all[dt]["temp"].append(item["main"]["temp"])
                 if "rain" in item and "3h" in item["rain"]:
                     weather_all[dt]["rain"] += item["rain"]["3h"]
+
         weather_df = pd.DataFrame([
-            {"date": d, "Dag": d.strftime("%a %d"), "Temp": np.mean(v["temp"]), "Neerslag_mm": v["rain"]}
+            {"date": d, "Dag": d.strftime("%a %d"), "Temp": round(np.mean(v["temp"]),1), "Neerslag_mm": round(v["rain"],1)}
             for d, v in weather_all.items()
         ])
+        # Alleen dagen tonen die ook in grafiek staan (historie + voorspelling)
+        visible_days = pd.concat([daily["date"], pd.to_datetime(forecast_df["Dag"], format="%a %d")])
+        weather_df = weather_df[weather_df["date"].isin(visible_days.dt.date)]
     else:
         weather_df = pd.DataFrame()
 
-    # GRAFIEK – WEERLIJNEN OVER HISTORIE + VOORSPELLING
+    # --- GRAFIEK MET WEERLIJNEN + NETTE LEGENDA ---
     fig = go.Figure()
+
     fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", marker_color="#1f77b4"))
     fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", marker_color="#ff7f0e"))
     fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", marker_color="#17becf"))
     fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Omzet"], name="Voorsp. Omzet", marker_color="#ff9896"))
 
     if not weather_df.empty:
-        fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Temp"], name="Temp °C", yaxis="y2",
+        fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Temp"], name="Temperatuur °C", yaxis="y2",
                                  mode="lines+markers", line=dict(color="orange", width=4)))
         fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Neerslag_mm"], name="Neerslag mm", yaxis="y3",
                                  mode="lines+markers", line=dict(color="blue", width=4, dash="dash")))
 
     fig.update_layout(
         barmode="group",
-        title="Footfall & Omzet + Weerimpact (oranje = temp, blauw = regen)",
-        yaxis=dict(title="Footfall / Omzet €"),
+        title="Footfall & Omzet + Weerimpact",
+        yaxis=dict(title="Aantal / €"),
         yaxis2=dict(title="Temp °C", overlaying="y", side="right", position=0.85, showgrid=False),
         yaxis3=dict(title="Neerslag mm", overlaying="y", side="right", position=0.93, showgrid=False),
-        legend=dict(x=0, y=1.15, orientation="h"),
+        legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.8)", bordercolor="gray", borderwidth=1),
         height=650
     )
     st.plotly_chart(fig, use_container_width=True)
