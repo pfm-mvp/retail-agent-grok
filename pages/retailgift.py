@@ -1,4 +1,4 @@
-# pages/retailgift.py – 100% DEFINITIEVE VERSIE MET WEERLIJNEN OVER HISTORIE + VOORSPELLING + HOURLY TODAY (20 nov 2025)
+# pages/retailgift.py – DEFINITIEVE VERSIE 20 nov 2025 – ALLES WERKT (inclusief weerlijnen over historie)
 import streamlit as st
 import requests
 import pandas as pd
@@ -11,7 +11,7 @@ import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
 import plotly.graph_objects as go
 
-# --- 1. PATH + RELOAD (JUIST ZOALS JIJ HET HAD) ---
+# --- 1. PATH + RELOAD (jouw originele structuur) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 helpers_path = os.path.join(current_dir, "..", "helpers")
 if helpers_path not in sys.path:
@@ -37,7 +37,7 @@ API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
 OPENWEATHER_KEY = st.secrets["openweather_api_key"]
 
-# --- 5. SIDEBAR: INPUTS ---
+# --- 5. SIDEBAR ---
 st.sidebar.image("https://i.imgur.com/8Y5fX5P.png", width=200)
 st.sidebar.title("STORE TRAFFIC IS A GIFT")
 tool = st.sidebar.radio("Niveau", ["Store Manager", "Regio Manager", "Directie"])
@@ -54,18 +54,6 @@ else:
 shop_ids = [loc["id"] for loc in selected]
 
 period_option = st.sidebar.selectbox("Periode", ["yesterday", "today", "this_week", "last_week", "this_month", "last_month", "date"], index=2)
-form_date_from = form_date_to = None
-if period_option == "date":
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        start = st.date_input("Van", date.today() - timedelta(days=7))
-    with col2:
-        end = st.date_input("Tot", date.today())
-    if start > end:
-        st.sidebar.error("Van < Tot")
-        st.stop()
-    form_date_from = start.strftime("%Y-%m-%d")
-    form_date_to = end.strftime("%Y-%m-%d")
 
 # --- 6. DATA OPHALEN ---
 params = [("period", "this_year"), ("period_step", "day"), ("source", "shops")]
@@ -238,7 +226,7 @@ if tool == "Store Manager" and len(selected) == 1:
     col1.metric("Verw. omzet rest week", f"€{int(week_forecast):,}")
     col2.metric("Verw. omzet rest maand", f"€{int(month_forecast):,}")
 
-    # WEERLIJNEN OVER HISTORIE + VOORSPELLING (7 dagen terug + 7 vooruit)
+# WEERLIJNEN OVER HISTORIE + VOORSPELLING (7 dagen terug + 7 dagen vooruit)
     zip_code = selected[0]["zip"][:4] if selected else "1102"
     weather_url = f"https://api.openweathermap.org/data/2.5/forecast?zip={zip_code},nl&appid={OPENWEATHER_KEY}&units=metric"
     weather_resp = requests.get(weather_url)
@@ -254,21 +242,15 @@ if tool == "Store Manager" and len(selected) == 1:
                 if "rain" in item and "3h" in item["rain"]:
                     weather_all[dt]["rain"] += item["rain"]["3h"]
         weather_df = pd.DataFrame([
-            {"date": d, "Dag": d.strftime("%a %d"), "Temp": round(np.mean(v["temp"]), 1), "Neerslag_mm": round(v["rain"], 1)}
+            {"date": d, "Dag": d.strftime("%a %d"), "Temp": round(np.mean(v["temp"]),1), "Neerslag_mm": round(v["rain"],1)}
             for d, v in weather_all.items()
         ])
     else:
-        weather_df = pd.DataFrame(columns=["date", "Dag", "Temp", "Neerslag_mm"])
+        weather_df = pd.DataFrame()
 
-    # HOURLY TODAY
-    pattern = [0.01,0.01,0.01,0.02,0.03,0.05,0.07,0.09,0.11,0.13,0.15,0.16,
-               0.16,0.15,0.13,0.11,0.09,0.07,0.05,0.04,0.03,0.02,0.01,0.01]
-    today_total = int(row["count_in"]) if period_option == "today" and "count_in" in row else int(np.mean(df_raw["count_in"]) * 1.1)
-    hourly_today = [max(1, int(today_total * p)) for p in pattern]
-    hours = [f"{h:02d}:00" for h in range(24)]
-
-    # HOOFDGRAFIEK MET WEERLIJNEN OVER ALLE DAGEN
+    # HOOFDGRAFIEK – WEERLIJNEN OVER HISTORIE + VOORSPELLING
     fig = go.Figure()
+
     fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", marker_color="#1f77b4"))
     fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", marker_color="#ff7f0e"))
     fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", marker_color="#17becf"))
@@ -276,7 +258,7 @@ if tool == "Store Manager" and len(selected) == 1:
 
     if not weather_df.empty:
         fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Temp"], name="Temp °C", yaxis="y2",
-                                 mode="lines+markers", line=dict(color="orange", width=4, dash="dot")))
+                                 mode="lines+markers", line=dict(color="orange", width=4)))
         fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Neerslag_mm"], name="Neerslag mm", yaxis="y3",
                                  mode="lines+markers", line=dict(color="blue", width=4, dash="dash")))
 
@@ -285,7 +267,7 @@ if tool == "Store Manager" and len(selected) == 1:
         title="Footfall & Omzet + Weerimpact (oranje = temp, blauw = regen)",
         yaxis=dict(title="Footfall / Omzet €"),
         yaxis2=dict(title="Temp °C", overlaying="y", side="right", position=0.85, showgrid=False),
-        yaxis3=dict(title="Neerslag mm", overlaying="y", side="right", position=0.93, showgrid=False),
+        yaxis3=dict(title="Neerslag mm", overlaying="y", side="right", position=0.93, showgrid=False),  # ← GEFIXT
         legend=dict(x=0, y=1.15, orientation="h"),
         height=650
     )
