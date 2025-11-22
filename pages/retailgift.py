@@ -263,10 +263,10 @@ if tool == "Store Manager" and len(selected) == 1:
     }
     weather_df["Weer"] = weather_df["Icon"].map(icon_map).fillna("🌤️")
 
-    # --- GRAFIEK MET WEERICONEN BOVEN ELKE DAG! ---
+    # --- GRAFIEK MET WEERICONEN + PERFECT LEESBARE LEGENDA ---
     fig = go.Figure()
 
-    # Bars (zoals voorheen)
+    # Bars
     fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", marker_color="#1f77b4"))
     fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", marker_color="#ff7f0e"))
     fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", marker_color="#17becf"))
@@ -275,32 +275,53 @@ if tool == "Store Manager" and len(selected) == 1:
     # Weerlijnen
     if not weather_df.empty:
         fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Temp"], name="Temperatuur °C", yaxis="y2",
-                                 mode="lines+markers", line=dict(color="orange", width=4), marker=dict(size=6)))
+                                 mode="lines+markers", line=dict(color="orange", width=5), marker=dict(size=8)))
         fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Neerslag_mm"], name="Neerslag mm", yaxis="y3",
-                                 mode="lines+markers", line=dict(color="blue", width=4, dash="dot"), marker=dict(size=6)))
+                                 mode="lines+markers", line=dict(color="blue", width=5, dash="dot"), marker=dict(size=8)))
 
-        # WEERICONEN BOVENAAN ELKE DAG (boven de balken!)
-        max_y = max(daily["turnover"].max(), forecast_df["Verw. Omzet"].max()) * 1.15
+        # WEERICONEN BOVENAAN (nu netjes boven de hoogste balk)
+        max_y = max(
+            daily["turnover"].max() if not daily.empty else 0,
+            forecast_df["Verw. Omzet"].max()
+        ) * 1.18
+
         for _, row in weather_df.iterrows():
             fig.add_annotation(
                 x=row["Dag"],
                 y=max_y,
                 text=row["Weer"],
                 showarrow=False,
-                font=dict(size=20),
+                font=dict(size=26),
                 yshift=10
             )
 
+    # --- LEGENDA FIX: wit vlak, zwarte tekst, grotere font, buiten de grafiek ---
     fig.update_layout(
         barmode="group",
-        title="Footfall & Omzet + Weerimpact (met echte weericonen per dag!)",
+        title="Footfall & Omzet + Weerimpact (iconen + perfecte legenda)",
         yaxis=dict(title="Aantal / Omzet €"),
         yaxis2=dict(title="Temp °C", overlaying="y", side="right", position=0.88, showgrid=False),
         yaxis3=dict(title="Neerslag mm", overlaying="y", side="right", position=0.94, showgrid=False),
-        legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.95)", bordercolor="gray", borderwidth=1),
-        height=720,
-        margin=dict(t=160)
+    
+        legend=dict(
+            x=0.01, 
+            y=0.99,
+            xanchor="left",
+            yanchor="top",
+            bgcolor="rgba(255, 255, 255, 0.95)",   # wit met lichte transparantie
+            bordercolor="gray",
+            borderwidth=2,
+            font=dict(size=15, color="black", family="Arial Black"),
+            title="Legenda",
+            title_font=dict(size=16, color="black")
+        ),
+    
+        height=760,
+        margin=dict(t=160, l=80, r=100, b=80),
+        plot_bgcolor="#0e1117",
+        paper_bgcolor="#0e1117"
     )
+
     st.plotly_chart(fig, use_container_width=True)
 
     # ACTIE
