@@ -315,5 +315,4 @@ else:
     st.metric("Gem. Conversie", f"{agg['conversion_rate']:.1f}%")
     st.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
     st.info("**Q4 Forecast:** +4% omzet bij mild weer")
-
 st.caption("RetailGift AI – Weericonen, historie + voorspelling, legenda perfect – 100% stabiel – 22 nov 2025")
