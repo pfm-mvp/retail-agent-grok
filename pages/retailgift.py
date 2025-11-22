@@ -222,7 +222,7 @@ if tool == "Store Manager" and len(selected) == 1:
     st.subheader("Voorspelling komende 7 dagen")
     st.dataframe(forecast_df.style.format({"Verw. Footfall": "{:,}", "Verw. Omzet": "€{:,}"}))
 
-    # --- WEERLIJNEN: ECHTE HISTORIE + VOORSPELLING VIA VISUAL CROSSING ---
+    # --- WEERLIJNEN + WEERICONEN VIA VISUAL CROSSING (ECHTE ICONEN PER DAG!) ---
     zip_code = selected[0]["zip"][:4] if selected else "1102"
     start_hist = df_raw["date"].min().date() if not df_raw.empty else today.date()
     end_forecast = today.date() + timedelta(days=7)
@@ -236,45 +236,70 @@ if tool == "Store Manager" and len(selected) == 1:
             weather_df = pd.DataFrame([{
                 "Dag": pd.to_datetime(d["datetime"]).strftime("%a %d"),
                 "Temp": round(d["temp"], 1),
-                "Neerslag_mm": round(d.get("precip", 0), 1)
+                 "Neerslag_mm": round(d.get("precip", 0), 1),
+                "Icon": d["icon"]  # ← dit is de sleutel!
             } for d in days])
     except:
-        st.warning("Weerdata niet beschikbaar – simulatie gebruikt")
+        st.warning("Weerdata niet beschikbaar – fallback zonder iconen")
 
-    # Fallback simulatie als key ontbreekt
+    # Fallback als API faalt
     if weather_df.empty:
         all_dates = pd.date_range(start_hist, end_forecast)
         weather_df = pd.DataFrame([{
             "Dag": d.strftime("%a %d"),
             "Temp": 8 + np.random.uniform(-3, 3),
-            "Neerslag_mm": max(0, np.random.exponential(1.5))
+            "Neerslag_mm": max(0, np.random.exponential(1.5)),
+            "Icon": "partly-cloudy-day"
         } for d in all_dates])
 
     visible_days_str = daily["date"].tolist() + forecast_df["Dag"].tolist()
-    weather_df = weather_df[weather_df["Dag"].isin(visible_days_str)]
+    weather_df = weather_df[weather_df["Dag"].isin(visible_days_str)].reset_index(drop=True)
 
-    # --- GRAFIEK ---
+    # Mapping van Visual Crossing icon → emoji (ziet er top uit!)
+    icon_map = {
+        "clear-day": "☀️", "clear-night": "🌙", "partly-cloudy-day": "⛅", "partly-cloudy-night": "🌤️",
+        "cloudy": "☁️", "overcast": "☁️☁️", "fog": "🌫️", "rain": "🌧️", "drizzle": "🌦️",
+        "snow": "❄️", "sleet": "🌨️", "wind": "💨", "thunderstorm": "⛈️"
+    }
+    weather_df["Weer"] = weather_df["Icon"].map(icon_map).fillna("🌤️")
+
+    # --- GRAFIEK MET WEERICONEN BOVEN ELKE DAG! ---
     fig = go.Figure()
+
+    # Bars (zoals voorheen)
     fig.add_trace(go.Bar(x=daily["date"], y=daily["count_in"], name="Footfall", marker_color="#1f77b4"))
     fig.add_trace(go.Bar(x=daily["date"], y=daily["turnover"], name="Omzet", marker_color="#ff7f0e"))
     fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Footfall"], name="Voorsp. Footfall", marker_color="#17becf"))
     fig.add_trace(go.Bar(x=forecast_df["Dag"], y=forecast_df["Verw. Omzet"], name="Voorsp. Omzet", marker_color="#ff9896"))
 
+    # Weerlijnen
     if not weather_df.empty:
         fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Temp"], name="Temperatuur °C", yaxis="y2",
                                  mode="lines+markers", line=dict(color="orange", width=4), marker=dict(size=6)))
         fig.add_trace(go.Scatter(x=weather_df["Dag"], y=weather_df["Neerslag_mm"], name="Neerslag mm", yaxis="y3",
                                  mode="lines+markers", line=dict(color="blue", width=4, dash="dot"), marker=dict(size=6)))
 
+        # WEERICONEN BOVENAAN ELKE DAG (boven de balken!)
+        max_y = max(daily["turnover"].max(), forecast_df["Verw. Omzet"].max()) * 1.15
+        for _, row in weather_df.iterrows():
+            fig.add_annotation(
+                x=row["Dag"],
+                y=max_y,
+                text=row["Weer"],
+                showarrow=False,
+                font=dict(size=20),
+                yshift=10
+            )
+
     fig.update_layout(
         barmode="group",
-        title="Footfall & Omzet + Weerimpact (historie + voorspelling)",
+        title="Footfall & Omzet + Weerimpact (met echte weericonen per dag!)",
         yaxis=dict(title="Aantal / Omzet €"),
         yaxis2=dict(title="Temp °C", overlaying="y", side="right", position=0.88, showgrid=False),
         yaxis3=dict(title="Neerslag mm", overlaying="y", side="right", position=0.94, showgrid=False),
-        legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.95)", bordercolor="gray", borderwidth=1, font=dict(size=13, color="black")),
-        height=680,
-        margin=dict(t=120)
+        legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.95)", bordercolor="gray", borderwidth=1),
+        height=720,
+        margin=dict(t=160)
     )
     st.plotly_chart(fig, use_container_width=True)
 
