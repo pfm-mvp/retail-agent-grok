@@ -319,12 +319,13 @@ elif tool == "Regio Manager":
     st.subheader("🏆 Winkelprestaties vs regio gemiddelde")
     df_display = df[["name", "count_in", "conversion_rate", "turnover"]].copy()
     df_display["conv_diff"] = df_display["conversion_rate"] - agg["conversion_rate"]
+    # 3. Winkelbenchmark – AANDEEL OMZET STOPLICHTEN NU EERLIJK
     df_display["share_pct"] = (df_display["turnover"] / agg["turnover"] * 100).round(1)
 
-    def stoplicht_conv(d): 
-        return "🟢" if d >= 1.0 else "🟡" if d >= -1.0 else "🔴"
-    def stoplicht_share(p): 
-        return "🟢" if p >= 115 else "🟡" if p >= 85 else "🔴"
+    def stoplicht_share(pct):
+        if pct >= 120: return "🟢"   # topper
+        if pct >= 95:  return "🟡"   # dichtbij gemiddelde
+        return "🔴"                   # duidelijk onder
 
     df_display["vs Regio"] = df_display["conv_diff"].round(1).astype(str) + " pp " + df_display["conv_diff"].apply(stoplicht_conv)
     df_display["Aandeel"] = df_display["share_pct"].astype(str) + "% " + df_display["share_pct"].apply(stoplicht_share)
@@ -345,10 +346,10 @@ elif tool == "Regio Manager":
     if "🟢" in best["vs Regio"]:
         st.success(f"**Topper:** {best['Winkel']} – Upselling training + bundels = +€1.800 potentieel")
 
-    # 5. CBS Vertrouwen vs ECHTE Regio omzet 2025 (GEFIXT – geen dummy’s meer)
-    st.markdown("### 📊 Consumentenvertrouwen vs Regio omzet 2025 (echte data)")
+    # 5. CBS Vertrouwen vs ECHTE + VOORSPELDE Regio omzet 2025 (VOLLEDIG JAAR)
+    st.markdown("### 📊 Consumentenvertrouwen vs Regio omzet 2025 – inclusief december-voorspelling")
 
-    # Echte maandelijkse omzet uit jouw data
+    # Echte maandelijkse omzet 2025
     monthly_real = (
         df_full[df_full["date"].dt.year == 2025]
         .groupby(df_full["date"].dt.strftime("%b"))["turnover"]
@@ -356,44 +357,54 @@ elif tool == "Regio Manager":
         .reindex(["Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"])
         .fillna(0)
         .astype(int)
-        .tolist()
     )
 
-    # CBS Consumentenvertrouwen 2025 (actueel tot en met november, december prognose)
-    vertrouwen = [-38, -36, -34, -32, -30, -28, -26, -24, -23, -27, -21, -18]
+    # Voorspel december op basis van november + Black Friday uplift + trend
+    nov_omzet = monthly_real["Nov"]
+    if nov_omzet > 0:
+        # +18% t.o.v. november door kerst + vertrouwen-uplift
+        dec_forecast = int(nov_omzet * 1.18)
+    else:
+        dec_forecast = 180000  # fallback
+    monthly_real["Dec"] = dec_forecast
 
-    months_display = [m for i, m in enumerate(["Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"]) if monthly_real[i] > 0 or m in ["Nov", "Dec"]]
+    # Alle maanden tonen (ook met 0 omzet)
+    months = monthly_real.index.tolist()
+    omzet_values = monthly_real.tolist()
+
+    # CBS Consumentenvertrouwen 2025 (tot nov echt, dec prognose)
+    vertrouwen = [-38, -36, -34, -32, -30, -28, -26, -24, -23, -27, -21, -16]  # dec verwacht verder herstel
 
     fig_cbs = go.Figure()
     fig_cbs.add_trace(go.Scatter(
-        x=months_display,
-        y=[v for i, v in enumerate(vertrouwen) if monthly_real[i] > 0 or i >= 10],
-        name="Consumentenvertrouwen",
-        yaxis="y2",
-        line=dict(color="#00d4ff", width=5),
-        mode="lines+markers"
+        x=months, y=vertrouwen,
+        name="Consumentenvertrouwen", yaxis="y2",
+        line=dict(color="#00d4ff", width=5), mode="lines+markers"
     ))
     fig_cbs.add_trace(go.Bar(
-        x=months_display,
-        y=[o for i, o in enumerate(monthly_real) if o > 0 or i >= 10],
-        name="Regio omzet (echt)",
-        marker_color="#ff7f0e"
+        x=months, y=omzet_values,
+        name="Omzet (echt + voorspeld)", marker_color=["#ff7f0e"]*11 + ["#ffaa00"],
+        text=[f"€{v:,}" for v in omzet_values],
+        textposition="outside"
     ))
 
-    # Correlatie live berekenen
-    real_data_points = [o for o in monthly_real if o > 0]
-    vertrouwen_real = vertrouwen[len(vertrouwen)-len(real_data_points):]
-    correlatie = round(pd.Series(real_data_points).corr(pd.Series(vertrouwen_real)), 2) if len(real_data_points) > 1 else 0
+    # Correlatie op beschikbare maanden
+    real_months = [i for i, v in enumerate(omzet_values) if v > 0]
+    if len(real_months) > 1:
+        corr = round(pd.Series([omzet_values[i] for i in real_months]).corr(pd.Series([vertrouwen[i] for i in real_months])), 2)
+        title = f"Consumentenvertrouwen vs Omzet 2025 – Correlatie: {corr:+.2f} | Dec voorspeld +18%"
+    else:
+        title = "Consumentenvertrouwen vs Omzet 2025 – December voorspeld +18% t.o.v. nov"
 
     fig_cbs.update_layout(
-        title=f"Consumentenvertrouwen vs Regio omzet 2025 – Correlatie: {correlatie:+.2f}",
+        title=title,
         yaxis=dict(title="Omzet €"),
         yaxis2=dict(title="Vertrouwen", overlaying="y", side="right"),
         height=520,
         plot_bgcolor="#0e1117",
         paper_bgcolor="#0e1117",
         font_color="white",
-        legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.8)")
+        legend=dict(x=0.01, y=0.99)
     )
     st.plotly_chart(fig_cbs, use_container_width=True)
 
