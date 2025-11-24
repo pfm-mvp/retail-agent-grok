@@ -315,26 +315,40 @@ elif tool == "Regio Manager":
 
     st.markdown("---")
 
-    # 3. Winkelbenchmark – stoplichten GEFIXT
+    # 3. Winkelbenchmark – ALLES NU PERFECT (conversie + aandeel stoplichten)
     st.subheader("🏆 Winkelprestaties vs regio gemiddelde")
     df_display = df[["name", "count_in", "conversion_rate", "turnover"]].copy()
+
+    # Conversie verschil vs regio gemiddelde
     df_display["conv_diff"] = df_display["conversion_rate"] - agg["conversion_rate"]
-    # 3. Winkelbenchmark – AANDEEL OMZET STOPLICHTEN NU EERLIJK
+
+    # Aandeel omzet in %
     df_display["share_pct"] = (df_display["turnover"] / agg["turnover"] * 100).round(1)
 
-    def stoplicht_share(pct):
-        if pct >= 120: return "🟢"   # topper
-        if pct >= 95:  return "🟡"   # dichtbij gemiddelde
-        return "🔴"                   # duidelijk onder
+    # Stoplichtfuncties (nu weer correct gedefinieerd!)
+    def stoplicht_conv(diff):
+        if diff >= 1.0:  return "🟢"
+        if diff >= -1.0: return "🟡"
+        return "🔴"
 
+    def stoplicht_share(pct):
+        if pct >= 120: return "🟢"   # duidelijk boven gemiddeld
+        if pct >= 90:  return "🟡"   # acceptabel
+        return "🔴"                  # significant onder
+
+    # Kolommen aanmaken
     df_display["vs Regio"] = df_display["conv_diff"].round(1).astype(str) + " pp " + df_display["conv_diff"].apply(stoplicht_conv)
-    df_display["Aandeel"] = df_display["share_pct"].astype(str) + "% " + df_display["share_pct"].apply(stoplicht_share)
+    df_display["Aandeel"]   = df_display["share_pct"].astype(str) + "% " + df_display["share_pct"].apply(stoplicht_share)
+
+    # Sorteren + finaliseren
     df_display = df_display.sort_values("conversion_rate", ascending=False)
     df_display = df_display[["name", "count_in", "conversion_rate", "turnover", "vs Regio", "Aandeel"]]
     df_display.columns = ["Winkel", "Footfall", "Conversie %", "Omzet €", "vs Regio", "Aandeel omzet"]
 
     st.dataframe(df_display.style.format({
-        "Footfall": "{:,}", "Conversie %": "{:.1f}", "Omzet €": "€{:,}"
+        "Footfall": "{:,}",
+        "Conversie %": "{:.1f}",
+        "Omzet €": "€{:,}"
     }), use_container_width=True)
 
     # 4. AI Hotspot Detector
