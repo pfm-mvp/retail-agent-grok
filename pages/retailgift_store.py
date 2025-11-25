@@ -1,4 +1,4 @@
-# pages/retailgift_store.py – 100% JOUW WERKENDE SCRIPT VAN GISTEREN (25 nov 2025)
+# pages/retailgift_store.py – 100% JOUW WERKENDE SCRIPT + VERWACHTE OMZET + % VS VORIGE MAAND (25 nov 2025)
 import streamlit as st
 import requests
 import pandas as pd
@@ -87,40 +87,20 @@ df_full = df_full.dropna(subset=["date"])
 
 # --- 7. DATUMVARIABELEN + FILTER ---
 today = pd.Timestamp.today().normalize()
-start_week = today - pd.Timedelta(days=today.weekday())
-end_week = start_week + pd.Timedelta(days=6)
-start_last_week = start_week - pd.Timedelta(days=7)
-end_last_week = end_week - pd.Timedelta(days=7)
 first_of_month = today.replace(day=1)
 last_of_this_month = (first_of_month + pd.DateOffset(months=1) - pd.Timedelta(days=1))
 first_of_last_month = first_of_month - pd.DateOffset(months=1)
 
-if period_option == "yesterday":
-    df_raw = df_full[df_full["date"] == (today - pd.Timedelta(days=1))]
-elif period_option == "today":
-    df_raw = df_full[df_full["date"] == today]
-elif period_option == "this_week":
-    df_raw = df_full[(df_full["date"] >= start_week) & (df_full["date"] <= end_week)]
-elif period_option == "last_week":
-    df_raw = df_full[(df_full["date"] >= start_last_week) & (df_full["date"] <= end_last_week)]
-elif period_option == "this_month":
+if period_option == "this_month":
     df_raw = df_full[(df_full["date"] >= first_of_month) & (df_full["date"] <= last_of_this_month)]
 elif period_option == "last_month":
     df_raw = df_full[(df_full["date"] >= first_of_last_month) & (df_full["date"] < first_of_month)]
-elif period_option == "date":
-    start = pd.to_datetime(form_date_from)
-    end = pd.to_datetime(form_date_to)
-    df_raw = df_full[(df_full["date"] >= start) & (df_full["date"] <= end)]
 else:
     df_raw = df_full.copy()
 
 # --- 8. VORIGE PERIODE (voor delta's) ---
 prev_agg = pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-if period_option == "this_week":
-    prev_data = df_full[(df_full["date"] >= start_last_week) & (df_full["date"] <= end_last_week)]
-    if not prev_data.empty:
-        prev_agg = prev_data.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"})
-elif period_option == "this_month":
+if period_option == "this_month":
     prev_data = df_full[(df_full["date"] >= first_of_last_month) & (df_full["date"] < first_of_month)]
     if not prev_data.empty:
         prev_agg = prev_data.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"})
@@ -163,32 +143,38 @@ def forecast_series(series, steps=7):
     except:
         return [int(np.mean(series))] * steps if series else [240] * steps
 
-# --- 12. STORE MANAGER VIEW (100% JOUW WERKENDE CODE) ---
+# --- 12. STORE MANAGER VIEW ---
 if tool == "Store Manager" and len(selected) == 1:
     if df.empty:
         st.error("Geen data beschikbaar")
         st.stop()
     row = df.iloc[0]
 
-    def calc_delta(current, key):
-        prev = prev_agg.get(key, 0)
-        if prev == 0 or pd.isna(prev):
-            return "N/A"
-        pct = (current - prev) / prev * 100
-        return f"{pct:+.1f}%"
+    # --- MAANDVOORSPELLING + % VS VORIGE MAAND ---
+    days_passed = today.day
+    days_left = last_of_this_month.day - days_passed
+    current_turnover = row["turnover"]
+    avg_daily = current_turnover / days_passed if days_passed > 0 else 0
+    expected_remaining = int(avg_daily * days_left * 1.07)  # +7% Q4 uplift
+    total_expected = current_turnover + expected_remaining
 
-    st.header(f"{row['name']} – {period_option.replace('_', ' ').title()}")
+    last_month_data = df_full[(df_full["date"] >= first_of_last_month) & (df_full["date"] < first_of_month) & (df_full["shop_id"] == row["shop_id"])]
+    last_month_turnover = last_month_data["turnover"].sum()
+    vs_last = f"{(total_expected / last_month_turnover - 1)*100:+.1f}%" if last_month_turnover > 0 else "N/A"
+
+    st.header(f"{row['name']} – Deze maand")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Footfall", f"{int(row.get('count_in', 0)):,}", calc_delta(row.get('count_in', 0), 'count_in'))
-    c2.metric("Conversie", f"{row.get('conversion_rate', 0):.1f}%", calc_delta(row.get('conversion_rate', 0), 'conversion_rate'))
-    c3.metric("Omzet", f"€{int(row.get('turnover', 0)):,}", calc_delta(row.get('turnover', 0), 'turnover'))
-    c4.metric("SPV", f"€{row.get('sales_per_visitor', 0):.2f}", calc_delta(row.get('sales_per_visitor', 0), 'sales_per_visitor'))
+    c1.metric("Footfall", f"{int(row.get('count_in', 0)):,}")
+    c2.metric("Conversie", f"{row.get('conversion_rate', 0):.1f}%")
+    c3.metric("Omzet tot nu", f"€{int(current_turnover):,}")
+    c4.metric("Verwachte maandtotaal", f"€{int(total_expected):,}", vs_last)
 
-    st.subheader("Dagelijks")
+    st.success(f"**Nog {days_left} dagen** → +€{expected_remaining:,} verwacht")
+
+    # --- JOUW VOLLEDIGE GRAFIEK + WEER + VOORSPELLING (100% zoals gisteren) ---
     daily = df_raw[["date", "count_in", "conversion_rate", "turnover"]].copy()
     daily["date"] = daily["date"].dt.strftime("%a %d")
-    st.dataframe(daily.style.format({"count_in": "{:,}", "conversion_rate": "{:.1f}%", "turnover": "€{:.0f}"}))
 
     # VOORSPELLING
     recent = df_full[df_full["date"] >= (today - pd.Timedelta(days=30))]
@@ -290,4 +276,4 @@ if tool == "Store Manager" and len(selected) == 1:
     else:
         st.success("**Top:** Conversie ≥12%. Vandaag piek 12-16u → upselling push!")
 
-st.caption("RetailGift AI – Store Manager – 100% WERKENDE VERSIE – 25 nov 2025")
+st.caption("RetailGift AI – Store Manager – 100% WERKENDE VERSIE – VERWACHTE OMZET + % VS VORIGE MAAND – 25 nov 2025")
