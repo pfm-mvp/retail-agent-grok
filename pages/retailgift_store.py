@@ -1,4 +1,4 @@
-# pages/retailgift_store.py – 100% JOUW WERKENDE SCRIPT + VERWACHTE OMZET + % VS VORIGE MAAND (25 nov 2025)
+# pages/retailgift_store.py – 100% JOUW WERKENDE SCRIPT + FIXES + VERWACHTE OMZET + % VS VORIGE MAAND (25 nov 2025)
 import streamlit as st
 import requests
 import pandas as pd
@@ -39,12 +39,18 @@ VISUALCROSSING_KEY = st.secrets.get("visualcrossing_key", "demo")
 # --- 5. SIDEBAR ---
 st.sidebar.image("https://i.imgur.com/8Y5fX5P.png", width=200)
 st.sidebar.title("STORE TRAFFIC IS A GIFT")
+tool = st.sidebar.radio("Niveau", ["Store Manager", "Regio Manager", "Directie"])
 clients = requests.get(CLIENTS_JSON).json()
 client = st.sidebar.selectbox("Klant", clients, format_func=lambda x: f"{x['name']} ({x['brand']})")
 client_id = client["company_id"]
 locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
-selected = st.sidebar.multiselect("Vestiging", locations, format_func=lambda x: x["name"], default=locations[:1])
+
+if tool == "Store Manager":
+    selected = st.sidebar.multiselect("Vestiging", locations, format_func=lambda x: x["name"], default=locations[:1])
+else:
+    selected = st.sidebar.multiselect("Vestiging(en)", locations, format_func=lambda x: x["name"], default=locations)
 shop_ids = [loc["id"] for loc in selected]
+
 period_option = st.sidebar.selectbox("Periode", ["yesterday", "today", "this_week", "last_week", "this_month", "last_month", "date"], index=4)
 form_date_from = form_date_to = None
 if period_option == "date":
@@ -81,20 +87,40 @@ df_full = df_full.dropna(subset=["date"])
 
 # --- 7. DATUMVARIABELEN + FILTER ---
 today = pd.Timestamp.today().normalize()
+start_week = today - pd.Timedelta(days=today.weekday())
+end_week = start_week + pd.Timedelta(days=6)
+start_last_week = start_week - pd.Timedelta(days=7)
+end_last_week = end_week - pd.Timedelta(days=7)
 first_of_month = today.replace(day=1)
 last_of_this_month = (first_of_month + pd.DateOffset(months=1) - pd.Timedelta(days=1))
 first_of_last_month = first_of_month - pd.DateOffset(months=1)
 
-if period_option == "this_month":
+if period_option == "yesterday":
+    df_raw = df_full[df_full["date"] == (today - pd.Timedelta(days=1))]
+elif period_option == "today":
+    df_raw = df_full[df_full["date"] == today]
+elif period_option == "this_week":
+    df_raw = df_full[(df_full["date"] >= start_week) & (df_full["date"] <= end_week)]
+elif period_option == "last_week":
+    df_raw = df_full[(df_full["date"] >= start_last_week) & (df_full["date"] <= end_last_week)]
+elif period_option == "this_month":
     df_raw = df_full[(df_full["date"] >= first_of_month) & (df_full["date"] <= last_of_this_month)]
 elif period_option == "last_month":
     df_raw = df_full[(df_full["date"] >= first_of_last_month) & (df_full["date"] < first_of_month)]
+elif period_option == "date":
+    start = pd.to_datetime(form_date_from)
+    end = pd.to_datetime(form_date_to)
+    df_raw = df_full[(df_full["date"] >= start) & (df_full["date"] <= end)]
 else:
     df_raw = df_full.copy()
 
 # --- 8. VORIGE PERIODE (voor delta's) ---
 prev_agg = pd.Series({"count_in": 0, "turnover": 0, "conversion_rate": 0, "sales_per_visitor": 0})
-if period_option == "this_month":
+if period_option == "this_week":
+    prev_data = df_full[(df_full["date"] >= start_last_week) & (df_full["date"] <= end_last_week)]
+    if not prev_data.empty:
+        prev_agg = prev_data.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"})
+elif period_option == "this_month":
     prev_data = df_full[(df_full["date"] >= first_of_last_month) & (df_full["date"] < first_of_month)]
     if not prev_data.empty:
         prev_agg = prev_data.agg({"count_in": "sum", "turnover": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"})
@@ -138,7 +164,7 @@ def forecast_series(series, steps=7):
         return [int(np.mean(series))] * steps if series else [240] * steps
 
 # --- 12. STORE MANAGER VIEW ---
-if len(selected) == 1:
+if tool == "Store Manager" and len(selected) == 1:
     if df.empty:
         st.error("Geen data beschikbaar")
         st.stop()
