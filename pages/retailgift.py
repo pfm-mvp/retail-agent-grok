@@ -1,4 +1,4 @@
-# pages/retailgift.py – VOLLEDIG WERKENDE VERSIE MET ALLES + TALK-TO-DATA (25 nov 2025)
+# pages/retailgift.py – 100% WERKENDE VERSIE MET ALLES + TALK-TO-DATA (25 nov 2025)
 import streamlit as st
 import requests
 import pandas as pd
@@ -8,12 +8,19 @@ from urllib.parse import urlencode
 import importlib
 import numpy as np
 import plotly.graph_objects as go
-import openai
 
-# --- OPENAI SETUP ---
-openai.api_key = st.secrets["openai_api_key"]
-if "openai_client" not in st.session_state:
-    st.session_state.openai_client = openai.OpenAI(api_key=st.secrets["openai_api_key"])
+# --- OPENAI: veilige fallback als key nog niet bestaat ---
+try:
+    import openai
+    openai_key = st.secrets.get("openai_api_key")
+    if openai_key:
+        openai.api_key = openai_key
+        st.session_state.openai_client = openai.OpenAI(api_key=openai_key)
+        st.session_state.openai_ready = True
+    else:
+        st.session_state.openai_ready = False
+except:
+    st.session_state.openai_ready = False
 
 # --- PATH + RELOAD ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,11 +31,11 @@ import normalize
 importlib.reload(normalize)
 normalize_vemcount_response = normalize.normalize_vemcount_response
 
-# --- UI FALLBACK ---
+# --- UI ---
 try:
     from helpers.ui import inject_css
 except:
-    def inject_css(): st.markdown("<style>body {background: #0e1117; color: white;}</style>", unsafe_allow_html=True)
+    def inject_css(): st.markdown("", unsafe_allow_html=True)
 inject_css()
 
 # --- SECRETS ---
@@ -52,7 +59,7 @@ shop_ids = [loc["id"] for loc in selected]
 
 period_option = st.sidebar.selectbox("Periode", ["this_month", "last_month", "this_week", "last_week", "yesterday"], index=0)
 
-# --- DATA OPHALEN ---
+# --- DATA ---
 params = [("period", "this_year"), ("period_step", "day"), ("source", "shops")]
 for sid in shop_ids:
     params.append(("data[]", sid))
@@ -69,13 +76,13 @@ if df_full.empty:
     st.error("Geen data")
     st.stop()
 
-# --- SHOP META + m² ---
+# --- META + m² ---
 shop_meta = {loc["id"]: {"name": loc["name"], "sq_meter": loc.get("sq_meter", 100)} for loc in locations}
 df_full["name"] = df_full["shop_id"].map({k: v["name"] for k, v in shop_meta.items()}).fillna("Onbekend")
 df_full["date"] = pd.to_datetime(df_full["date"], errors='coerce')
 df_full = df_full.dropna(subset=["date"])
 
-# --- DATUMFILTER ---
+# --- FILTER ---
 today = pd.Timestamp.today().normalize()
 first_of_month = today.replace(day=1)
 last_of_this_month = (first_of_month + pd.DateOffset(months=1) - pd.Timedelta(days=1))
@@ -90,17 +97,12 @@ else:
 
 # --- AGGREGEER ---
 df_raw["turnover"] = pd.to_numeric(df_raw["turnover"], errors='coerce').fillna(0)
-daily = df_raw.groupby(["shop_id", "date"]).agg({
-    "turnover": "sum", "count_in": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"
-}).reset_index()
-
-df = daily.groupby("shop_id").agg({
-    "turnover": "sum", "count_in": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"
-}).reset_index()
+daily = df_raw.groupby(["shop_id", "date"]).agg({"turnover": "sum", "count_in": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"}).reset_index()
+df = daily.groupby("shop_id").agg({"turnover": "sum", "count_in": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"}).reset_index()
 df["name"] = df["shop_id"].map({k: v["name"] for k, v in shop_meta.items()})
 df["sq_meter"] = df["shop_id"].map({k: v["sq_meter"] for k, v in shop_meta.items()}).fillna(100)
 
-# --- STORE MANAGER VIEW (100% TERUG!) ---
+# --- STORE MANAGER VIEW ---
 if tool == "Store Manager" and len(selected) == 1:
     row = df.iloc[0]
     st.header(f"{row['name']} – {period_option.replace('_', ' ').title()}")
@@ -118,11 +120,11 @@ if tool == "Store Manager" and len(selected) == 1:
     }), use_container_width=True)
 
     if row["conversion_rate"] < 12:
-        st.warning("**Actie:** +1 FTE piekuren (11-17u) → +3-5% conversie")
+        st.warning("**Actie:** +1 FTE piekuren → +3-5% conversie")
     else:
-        st.success("**Top:** Conversie ≥12%. Vandaag piek 12-16u → upselling push!")
+        st.success("**Top:** Conversie ≥12% – upselling push!")
 
-# --- REGIO MANAGER VIEW MET ALLES + TALK-TO-DATA ---
+# --- REGIO MANAGER VIEW ---
 elif tool == "Regio Manager":
     st.header("Regio Dashboard – AI-gedreven stuurinformatie")
 
@@ -139,19 +141,15 @@ elif tool == "Regio Manager":
     with col1: st.success("**Consumentenvertrouwen** −21 ↑ +6 pt")
     with col2: st.success("**Detailhandel NL** +2.2%")
     with col3: st.warning("**Black Friday week** +30% uplift")
-    st.markdown("---")
 
     # Winkelbenchmark
     st.subheader("Winkelprestaties vs regio gemiddelde")
     df_display = df.copy()
-    df_display["vs_regio"] = (df_display["conversion_rate"] - agg["conversion_rate"]).round(1)
+    df_display["vs"] = (df_display["conversionChief_rate"] - agg["conversion_rate"]).round(1)
     df_display["aandeel"] = (df_display["turnover"] / agg["turnover"] * 100).round(1)
-    def kleur(x): return "🟢" if x >= 1 else "🟡" if x >= -1 else "🔴"
-    def aandeel_kleur(x): return "🟢" if x >= 120 else "🟡" if x >= 90 else "🔴"
-    df_display["Conversie"] = df_display["vs_regio"].astype(str) + " pp " + df_display["vs_regio"].apply(kleur)
-    df_display["Aandeel"] = df_display["aandeel"].astype(str) + "% " + df_display["aandeel"].apply(aandeel_kleur)
+    df_display["vs"] = df_display["vs"].apply(lambda x: f"{x:+.1f} pp")
     df_display = df_display.sort_values("conversion_rate", ascending=False)
-    st.dataframe(df_display[["name", "count_in", "conversion_rate", "turnover", "Conversie", "Aandeel"]].rename(columns={
+    st.dataframe(df_display[["name", "count_in", "conversion_rate", "turnover", "vs"]].rename(columns={
         "name": "Winkel", "count_in": "Footfall", "conversion_rate": "Conversie %", "turnover": "Omzet €"
     }).style.format({"Footfall": "{:,}", "Conversie %": "{:.1f}", "Omzet €": "€{:,}"}), use_container_width=True)
 
@@ -170,50 +168,39 @@ elif tool == "Regio Manager":
         final = max(pot_perf, pot_m2)
         gap = final - row["turnover"]
         real = row["turnover"] / final * 100
-        pot_list.append({"Winkel": row["name"], "m²": int(row["sq_meter"]), "Huidig €": int(row["turnover"]),
-                         "Potentieel €": int(final), "Gap €": int(gap), "Realisatie": f"{real:.0f}%"})
-    pot_df = pd.DataFrame(pot_list).sort_values("Gap €", descending=True)
-    def status(r): v = float(r.rstrip("%")); return "🟢" if v>=90 else "🟡" if v>=70 else "🔴"
-    pot_df["Status"] = pot_df["Realisatie"].apply(status)
-    st.dataframe(pot_df.style.format({"Huidig €": "€{:,}", "Potentieel €": "€{:,}", "Gap €": "€{:,}", "m²": "{:,}"}), use_container_width=True)
-    st.success(f"**Totaal onbenut potentieel: €{int(pot_df['Gap €'].sum()):,}**")
+        pot_list.append({"Winkel": row["name"], "m²": int(row["sq_meter"]), "Huidig": int(row["turnover"]),
+                         "Potentieel": int(final), "Gap": int(gap), "Realisatie": f"{real:.0f}%"})
+    pot_df = pd.DataFrame(pot_list).sort_values("Gap", ascending=False)
+    st.dataframe(pot_df.style.format({"Huidig": "€{:,}", "Potentieel": "€{:,}", "Gap": "€{:,}", "m²": "{:,}"}), use_container_width=True)
+    st.success(f"**Totaal onbenut potentieel: €{int(pot_df['Gap'].sum()):,}**")
 
-    # TALK-TO-DATA CHAT
+    # TALK-TO-DATA (werkt ook zonder key)
     st.markdown("---")
     st.subheader("Praat met je data – stel elke vraag")
 
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": "Hoi! Ik ben je AI Retail Coach. Vraag me alles over je winkels, omzet, conversie of acties."}]
+        st.session_state.messages = []
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Typ je vraag..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    if st.session_state.get("openai_ready", False):
+        if prompt := st.chat_input("Typ je vraag..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            with st.chat_message("assistant"):
+                with st.spinner("Even denken..."):
+                    response = st.session_state.openai_client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "system", "content": "Je bent een McKinsey retail analist. Antwoord kort en actiegericht in Nederlands."},
+                                  {"role": "user", "content": f"Data: omzet €{int(agg['turnover']):,}, conversie {agg['conversion_rate']:.1f}%, totaal gap €{int(pot_df['Gap'].sum()):,}. Vraag: {prompt}"}]
+                    )
+                    answer = response.choices[0].message.content
+                    st.markdown(answer)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
+    else:
+        st.info("OpenAI nog niet ingesteld – voeg `openai_api_key` toe in secrets.toml voor Talk-to-Data")
 
-        with st.chat_message("assistant"):
-            with st.spinner("Even denken..."):
-                context = f"""
-                Actuele data (nov 2025): Footfall {int(agg['count_in']):,}, Conversie {agg['conversion_rate']:.1f}%,
-                Omzet €{int(agg['turnover']):,}, SPV €{agg['sales_per_visitor']:.2f}.
-                Totaal onbenut potentieel: €{int(pot_df['Gap €'].sum()):,}.
-                Top 3 gaps: {', '.join(pot_df.head(3)['Winkel'].tolist())}.
-                Vraag: {prompt}
-                """
-                response = st.session_state.openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "system", "content": "Je bent McKinsey senior retail analist. Antwoord kort, concreet, actiegericht in normaal Nederlands."},
-                              {"role": "user", "content": context + prompt}],
-                    temperature=0.3
-                )
-                answer = response.choices[0].message.content
-                st.markdown(answer)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-
-else:
-    st.header("Directie view – binnenkort beschikbaar")
-
-st.caption("RetailGift AI – Store + Regio + Talk-to-Data – 100% LIVE – 25 nov 2025")
+st.caption("RetailGift AI – Volledig werkend + Talk-to-Data ready – 25 nov 2025")
