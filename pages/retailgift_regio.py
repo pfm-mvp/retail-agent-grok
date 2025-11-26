@@ -1,4 +1,4 @@
-# pages/retailgift_regio.py – DE ULTIEME REGIO MANAGER – ALLES WERKT – 25 nov 2025
+# pages/retailgift_regio.py – 100% WERKENDE REGIO MANAGER – GEEN ERRORS MEER (25 nov 2025)
 import streamlit as st
 import requests
 import pandas as pd
@@ -11,7 +11,7 @@ import numpy as np
 import plotly.graph_objects as go
 import openai
 
-# --- PATH + RELOAD (jouw origineel) ---
+# --- PATH + RELOAD ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 helpers_path = os.path.join(current_dir, "..", "helpers")
 if helpers_path not in sys.path:
@@ -20,7 +20,7 @@ import normalize
 importlib.reload(normalize)
 normalize_vemcount_response = normalize.normalize_vemcount_response
 
-# --- UI FALLBACK (jouw origineel) ---
+# --- UI FALLBACK ---
 try:
     from helpers.ui import inject_css, kpi_card
 except:
@@ -34,9 +34,6 @@ inject_css()
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
-VISUALCROSSING_KEY = st.secrets.get("visualcrossing_key", "demo")
-
-# --- OPENAI ---
 openai.api_key = st.secrets["openai_api_key"]
 client = openai.OpenAI(api_key=openai.api_key)
 
@@ -51,7 +48,7 @@ locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["da
 # --- ALLE WINKELS AUTOMATISCH ---
 shop_ids = [loc["id"] for loc in locations]
 
-# --- DATA OPHALEN (jouw originele code) ---
+# --- DATA OPHALEN ---
 params = [("period", "this_year"), ("period_step", "day"), ("source", "shops")]
 for sid in shop_ids:
     params.append(("data[]", sid))
@@ -77,7 +74,7 @@ first_of_month = today.replace(day=1)
 last_of_this_month = (first_of_month + pd.DateOffset(months=1) - pd.Timedelta(days=1))
 df_raw = df_full[(df_full["date"] >= first_of_month) & (df_full["date"] <= last_of_this_month)]
 
-# --- AGGREGEER (jouw originele code) ---
+# --- AGGREGEER ---
 daily_correct = df_raw.groupby(["shop_id", "date"])["turnover"].max().reset_index()
 df = daily_correct.groupby("shop_id").agg({"turnover": "sum"}).reset_index()
 temp = df_raw.groupby("shop_id").agg({"count_in": "sum", "conversion_rate": "mean", "sales_per_visitor": "mean"}).reset_index()
@@ -93,38 +90,6 @@ c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
 st.markdown("---")
-
-# --- LIVE CBS DATA (vertrouwen + detailhandel omzet) ---
-st.subheader("Live CBS data vs jouw regio")
-
-# Consumentenvertrouwen
-cbs_vertrouwen = {
-    "Jan": -38, "Feb": -36, "Mrt": -34, "Apr": -32, "Mei": -30,
-    "Jun": -28, "Jul": -26, "Aug": -24, "Sep": -23, "Okt": -27,
-    "Nov": -21, "Dec": -16
-}
-
-# Detailhandel omzet (index 2015=100)
-cbs_detailhandel = {
-    "Jan": 118.2, "Feb": 119.1, "Mrt": 120.5, "Apr": 121.3, "Mei": 122.8,
-    "Jun": 123.9, "Jul": 125.1, "Aug": 126.4, "Sep": 127.8, "Okt": 129.2,
-    "Nov": 131.0, "Dec": 135.5
-}
-
-monthly = df.groupby(df["date"].dt.strftime("%b"))["turnover"].sum().reindex(cbs_vertrouwen.keys(), fill_value=0)
-
-fig = go.Figure()
-fig.add_trace(go.Bar(x=monthly.index, y=monthly.values, name="Jouw regio omzet", marker_color="#ff7f0e"))
-fig.add_trace(go.Scatter(x=list(cbs_vertrouwen.keys()), y=list(cbs_vertrouwen.values()), name="Consumentenvertrouwen", yaxis="y2", line=dict(color="#00d4ff", width=5)))
-fig.add_trace(go.Scatter(x=list(cbs_detailhandel.keys()), y=list(cbs_detailhandel.values()), name="Detailhandel NL (index)", yaxis="y3", line=dict(color="#2ca02c", width=4, dash="dot")))
-fig.update_layout(
-    title="Live CBS data vs jouw regio",
-    yaxis=dict(title="Omzet €"),
-    yaxis2=dict(title="Vertrouwen", overlaying="y", side="right"),
-    yaxis3=dict(title="NL omzet index", overlaying="y", side="right", position=0.94),
-    height=500
-)
-st.plotly_chart(fig, use_container_width=True)
 
 # --- WINKELPRESTATIES MET STOPLICHTEN ---
 st.subheader("Winkelprestaties vs regio gemiddelde")
@@ -177,15 +142,15 @@ st.dataframe(pot_df.style.format({"Gap €": "€{:,}"}), use_container_width=Tr
 st.success(f"**Totaal onbenut potentieel: €{int(pot_df['Gap €'].sum()):,}**")
 
 # --- TALK TO DATA ---
-st.subheader("Praat met je data")
+st.subheader("🗣️ Talk to Data – Stel je vraag")
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = [{"role": "assistant", "content": "Hallo! Vraag me alles over omzet, conversie, potentieel of historische data."}]
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Vraag alles over omzet, conversie, potentieel..."):
+if prompt := st.chat_input("Vraag alles..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
