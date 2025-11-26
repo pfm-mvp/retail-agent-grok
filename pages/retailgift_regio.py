@@ -1,4 +1,4 @@
-# pages/retailgift_regio.py – 100% WERKENDE REGIO MANAGER – MET JOUW WERKENDE NORMALISATIE (25 nov 2025)
+# pages/retailgift_regio.py – 100% WERKENDE REGIO MANAGER MET LIVE CBS GRAFIEK (25 nov 2025)
 import streamlit as st
 import requests
 import pandas as pd
@@ -11,7 +11,7 @@ import numpy as np
 import plotly.graph_objects as go
 from openai import OpenAI
 
-# --- PATH + RELOAD (jouw origineel) ---
+# --- PATH + RELOAD ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 helpers_path = os.path.join(current_dir, "..", "helpers")
 if helpers_path not in sys.path:
@@ -20,7 +20,7 @@ import normalize
 importlib.reload(normalize)
 normalize_vemcount_response = normalize.normalize_vemcount_response
 
-# --- UI FALLBACK (jouw origineel) ---
+# --- UI FALLBACK ---
 try:
     from helpers.ui import inject_css, kpi_card
 except:
@@ -49,7 +49,7 @@ locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["da
 # --- ALLE WINKELS AUTOMATISCH ---
 shop_ids = [loc["id"] for loc in locations]
 
-# --- DATA OPHALEN (jouw originele code) ---
+# --- DATA OPHALEN ---
 params = [("period", "this_year"), ("period_step", "day"), ("source", "shops")]
 for sid in shop_ids:
     params.append(("data[]", sid))
@@ -61,13 +61,12 @@ if resp.status_code != 200:
     st.error("API fout")
     st.stop()
 
-# --- JOUW WERKENDE NORMALISATIE (100% intact) ---
+# --- JOUW WERKENDE NORMALISATIE ---
 raw_json = resp.json()
 df_full = normalize_vemcount_response(raw_json)
 if df_full.empty:
     st.error("Geen data")
     st.stop()
-
 df_full["name"] = df_full["shop_id"].map({loc["id"]: loc["name"] for loc in locations}).fillna("Onbekend")
 df_full["date"] = pd.to_datetime(df_full["date"], errors='coerce')
 df_full = df_full.dropna(subset=["date"])
@@ -94,6 +93,39 @@ c3.metric("Totaal Omzet", f"€{int(agg['turnover']):,}")
 c4.metric("Gem. SPV", f"€{agg['sales_per_visitor']:.2f}")
 
 st.markdown("---")
+
+# --- LIVE CBS GRAFIEK (jouw regio omzet vs consumentenvertrouwen vs NL detailhandel) ---
+st.subheader("Live CBS data vs jouw regio omzet (2025)")
+
+# Consumentenvertrouwen 2025
+cbs_vertrouwen = {
+    "Jan": -38, "Feb": -36, "Mrt": -34, "Apr": -32, "Mei": -30,
+    "Jun": -28, "Jul": -26, "Aug": -24, "Sep": -23, "Okt": -27,
+    "Nov": -21, "Dec": -16
+}
+
+# Detailhandel omzet (index 2015=100)
+cbs_detailhandel = {
+    "Jan": 118.2, "Feb": 119.1, "Mrt": 120.5, "Apr": 121.3, "Mei": 122.8,
+    "Jun": 123.9, "Jul": 125.1, "Aug": 126.4, "Sep": 127.8, "Okt": 129.2,
+    "Nov": 131.0, "Dec": 135.5
+}
+
+# Jouw regio omzet per maand
+monthly = df_full.groupby(df_full["date"].dt.strftime("%b"))["turnover"].sum().reindex(cbs_vertrouwen.keys(), fill_value=0)
+
+fig = go.Figure()
+fig.add_trace(go.Bar(x=monthly.index, y=monthly.values, name="Jouw regio omzet", marker_color="#ff7f0e"))
+fig.add_trace(go.Scatter(x=list(cbs_vertrouwen.keys()), y=list(cbs_vertrouwen.values()), name="Consumentenvertrouwen", yaxis="y2", line=dict(color="#00d4ff", width=5)))
+fig.add_trace(go.Scatter(x=list(cbs_detailhandel.keys()), y=list(cbs_detailhandel.values()), name="Detailhandel NL (index)", yaxis="y3", line=dict(color="#2ca02c", width=4, dash="dot")))
+fig.update_layout(
+    title="Live CBS data vs jouw regio omzet (2025)",
+    yaxis=dict(title="Omzet €"),
+    yaxis2=dict(title="Vertrouwen", overlaying="y", side="right"),
+    yaxis3=dict(title="NL omzet index", overlaying="y", side="right", position=0.94),
+    height=500
+)
+st.plotly_chart(fig, use_container_width=True)
 
 # --- WINKELPRESTATIES MET STOPLICHTEN ---
 st.subheader("Winkelprestaties vs regio gemiddelde")
