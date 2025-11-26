@@ -11,7 +11,6 @@ st.set_page_config(page_title="Regio Manager", layout="wide")
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
-CBS_KEY = st.secrets["cbs_api_key"]  # jouw key in secrets
 
 # --- KLANT + ALLE WINKELS ---
 clients = requests.get(CLIENTS_JSON).json()
@@ -67,31 +66,34 @@ c1.metric("Totaal Footfall", f"{int(total['count_in']):,}")
 c2.metric("Gem. Conversie", f"{total['conversion_rate']:.1f}%")
 c3.metric("Totaal Omzet", f"€{int(total['turnover']):,}")
 
-# --- LIVE CBS DATA (vertrouwen + detailhandel omzet) ---
-@st.cache_data(ttl=86400)
-def get_cbs_data():
-    # Consumentenvertrouwen (maandelijks)
-    url = "https://opendata.cbs.nl/ODataApi/OData/83693NED/TypedDataSet?$filter=Perioden ge '2025MM01'"
-    vertrouwen = requests.get(url, headers={"Ocp-Apim-Subscription-Key": CBS_KEY}).json()
-    vertrouwen_maand = {v["Perioden"][:7]: v["Consumentenvertrouwen_1"] for v in vertrouwen["value"]}
-
-    # Detailhandel omzet (maandelijks)
-    url = "https://opendata.cbs.nl/ODataApi/OData/85828NED/TypedDataSet?$filter=Perioden ge '2025MM01' and Branche eq 'Totaal detailhandel'"
-    omzet = requests.get(url, headers={"Ocp-Apim-Subscription-Key": CBS_KEY}).json()
-    omzet_maand = {v["Perioden"][:7]: v["OmzetIndex_3"] for v in omzet["value"]}
-
-    return vertrouwen_maand, omzet_maand
-
-vertrouwen, omzet_nl = get_cbs_data()
-
-# --- GRAFIEK CBS + REGIO OMZET ---
+# --- LIVE CBS DATA (GEEN KEY NODIG) ---
 st.subheader("Consumentenvertrouwen + Detailhandel NL vs Jouw regio")
+
+# Consumentenvertrouwen (open data – geen key nodig)
+vertrouwen_url = "https://opendata.cbs.nl/ODataApi/OData/83693NED/TypedDataSet?$filter=Perioden ge '2025MM01'"
+vertrouwen_resp = requests.get(vertrouwen_url)
+if vertrouwen_resp.status_code == 200:
+    vertrouwen_data = vertrouwen_resp.json()["value"]
+    vertrouwen_maand = {v["Perioden"][:7]: v["Consumentenvertrouwen_1"] for v in vertrouwen_data}
+else:
+    vertrouwen_maand = {"2025-11": -21}  # fallback
+
+# Detailhandel omzet (open data – geen key nodig)
+omzet_url = "https://opendata.cbs.nl/ODataApi/OData/85828NED/TypedDataSet?$filter=Perioden ge '2025MM01' and Branche eq 'Totaal detailhandel'"
+omzet_resp = requests.get(omzet_url)
+if omzet_resp.status_code == 200:
+    omzet_data = omzet_resp.json()["value"]
+    omzet_maand = {v["Perioden"][:7]: v["OmzetIndex_3"] for v in omzet_data}
+else:
+    omzet_maand = {"2025-11": 102.2}  # fallback
+
+# --- GRAFIEK ---
 monthly = df.groupby(df["date"].dt.strftime("%b"))["turnover"].sum().reindex(["Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"], fill_value=0)
 
 fig = go.Figure()
 fig.add_trace(go.Bar(x=monthly.index, y=monthly.values, name="Jouw regio omzet", marker_color="#ff7f0e"))
-fig.add_trace(go.Scatter(x=list(vertrouwen.keys()), y=list(vertrouwen.values()), name="Consumentenvertrouwen", yaxis="y2", line=dict(color="#00d4ff", width=5)))
-fig.add_trace(go.Scatter(x=list(omzet_nl.keys()), y=list(omzet_nl.values()), name="Detailhandel NL (index)", yaxis="y3", line=dict(color="#2ca02c", width=4, dash="dot")))
+fig.add_trace(go.Scatter(x=list(vertrouwen_maand.keys()), y=list(vertrouwen_maand.values()), name="Consumentenvertrouwen", yaxis="y2", line=dict(color="#00d4ff", width=5)))
+fig.add_trace(go.Scatter(x=list(omzet_maand.keys()), y=list(omzet_maand.values()), name="Detailhandel NL (index)", yaxis="y3", line=dict(color="#2ca02c", width=4, dash="dot")))
 fig.update_layout(
     title="Live CBS data vs jouw regio",
     yaxis=dict(title="Omzet €"),
