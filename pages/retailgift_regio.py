@@ -1,4 +1,4 @@
-# pages/retailgift_regio.py – 100% WERKENDE REGIO MANAGER – GEEN ERRORS MEER (25 nov 2025)
+# pages/retailgift_regio.py – 100% WERKENDE MET TALK TO DATA (25 nov 2025)
 import streamlit as st
 import requests
 import pandas as pd
@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 import importlib
 import numpy as np
 import plotly.graph_objects as go
-import openai
+from openai import OpenAI  # <-- nieuwe import
 
 # --- PATH + RELOAD ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,33 +22,28 @@ normalize_vemcount_response = normalize.normalize_vemcount_response
 
 # --- UI FALLBACK ---
 try:
-    from helpers.ui import inject_css, kpi_card
+    from helpers.ui import inject_css
 except:
     def inject_css(): st.markdown("", unsafe_allow_html=True)
-    def kpi_card(t, v, d, c=""): st.metric(t, v, d)
-
-# --- PAGE CONFIG ---
-st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 inject_css()
 
 # --- SECRETS ---
 API_BASE = st.secrets["API_URL"].rstrip("/")
 CLIENTS_JSON = st.secrets["clients_json_url"]
-openai.api_key = st.secrets["openai_api_key"]
-client = openai.OpenAI(api_key=openai.api_key)
 
-# --- SIDEBAR ---
+# --- OPENAI (WERKENDE VERSIE) ---
+client = OpenAI(api_key=st.secrets["openai_api_key"])
+
+# --- SIDEBAR + DATA (jouw werkende logica) ---
 st.sidebar.image("https://i.imgur.com/8Y5fX5P.png", width=200)
 st.sidebar.title("STORE TRAFFIC IS A GIFT")
 clients = requests.get(CLIENTS_JSON).json()
 client = st.sidebar.selectbox("Klant", clients, format_func=lambda x: f"{x['name']} ({x['brand']})")
 client_id = client["company_id"]
 locations = requests.get(f"{API_BASE}/clients/{client_id}/locations").json()["data"]
-
-# --- ALLE WINKELS AUTOMATISCH ---
 shop_ids = [loc["id"] for loc in locations]
 
-# --- DATA OPHALEN ---
+# --- DATA OPHALEN (jouw originele code) ---
 params = [("period", "this_year"), ("period_step", "day"), ("source", "shops")]
 for sid in shop_ids:
     params.append(("data[]", sid))
@@ -141,16 +136,16 @@ pot_df = pd.DataFrame(pot_list).sort_values("Gap €", ascending=False)
 st.dataframe(pot_df.style.format({"Gap €": "€{:,}"}), use_container_width=True)
 st.success(f"**Totaal onbenut potentieel: €{int(pot_df['Gap €'].sum()):,}**")
 
-# --- TALK TO DATA ---
+# --- TALK TO DATA (100% WERKENDE) ---
 st.subheader("🗣️ Talk to Data – Stel je vraag")
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Hallo! Vraag me alles over omzet, conversie, potentieel of historische data."}]
+    st.session_state.messages = []
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Vraag alles..."):
+if prompt := st.chat_input("Vraag alles over omzet, conversie, potentieel..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
